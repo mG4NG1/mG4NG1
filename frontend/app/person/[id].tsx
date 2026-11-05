@@ -5,8 +5,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
-import { api, CrewMember, Person } from "@/src/api";
-import { Avatar, Button, Notice, TradeBadge, VerifiedBadge } from "@/src/components/ui";
+import { api, CrewMember, Person, Post } from "@/src/api";
+import { PostCard } from "@/src/components/post-card";
+import { Avatar, Button, Notice, SectionHeader, TradeBadge, VerifiedBadge } from "@/src/components/ui";
 import { useAddPerson } from "@/src/hooks";
 import { useSubscription } from "@/src/lib/revenuecat";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
@@ -23,6 +24,7 @@ export default function PersonScreen() {
 
   const person = useQuery({ queryKey: ["person", id], queryFn: () => api<Person>(`/users/${id}`) });
   const crew = useQuery({ queryKey: ["crew"], queryFn: () => api<CrewMember[]>("/connections"), enabled: isSubscribed });
+  const board = useQuery({ queryKey: ["posts", "by-user", id], queryFn: () => api<Post[]>(`/posts/by-user/${id}`), enabled: isSubscribed });
   const member = crew.data?.find((m) => m.user_id === id);
   const p = person.data;
 
@@ -107,6 +109,15 @@ export default function PersonScreen() {
             <View style={s.card}>
               <Text style={s.cardLabel}>ABOUT</Text>
               <Text style={s.bio}>{p.bio}</Text>
+            </View>
+          ) : null}
+
+          {isSubscribed && board.data?.length ? (
+            <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
+              <SectionHeader title={`${p.name.split(" ")[0]}'s board`} />
+              {board.data.map((post) => (
+                <PostCard key={post.post_id} post={post} onPress={() => router.push(`/post/${post.post_id}`)} testID={`person-post-${post.post_id}`} />
+              ))}
             </View>
           ) : null}
         </ScrollView>

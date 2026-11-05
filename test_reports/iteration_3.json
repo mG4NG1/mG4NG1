@@ -1,0 +1,44 @@
+{
+  "summary": "Tested the Work board backend and frontend. Backend: 15/15 pytest pass after one fix. POST /api/posts/{id}/keen returned 500 every time because a timezone-naive datetime from Mongo was compared with datetime.now(timezone.utc). I fixed it in posts.py. Checked options (pay bands 20..180 step 10, max=min+20), create (job 14d, work 3d, negotiable pay), 422 validation, 402 for free users, 401 without auth, and visibility (hidden when not crew and no location, shown within ~5 km with distance_km, hidden beyond 25 km, shown to crew with is_crew=true). Also checked type and trade filters, keen (count 1, auto chat message, idempotent with no duplicate message, 400 on own post), responders shown only to the poster, mine=true, by-user, and close (404 for non-owner, then GET 404 and keen 404). Frontend at 390x844, all flows pass: Work tab with segments, trade chips and Post button; free user sees work-locked; compose -> detail ('Pay $50-70/hr', Close post) -> back -> My board shows the card -> open card -> Close -> card gone; crew member's Work board shows the post with a CREW badge; person page shows person-post-*; I'm keen -> 'You're keen · Open chat' -> chat shows the auto message; poster detail shows Keen (1) and post-responder row.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/posts/{id}/keen", "issue": "FIXED: returned 500 TypeError (can't compare offset-naive and offset-aware datetimes) because Motor returns naive datetimes. I now normalise expires_at to UTC before comparing (posts.py keen()).", "priority": "CRITICAL"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/posts/{id}/keen", "issue": "The check-then-$push is not atomic. Two concurrent taps can add duplicate responders and send 2 messages. Use update_one({post_id, 'responders.user_id': {'$ne': uid}}, {$push}) and only insert the message when modified_count == 1."},
+      {"endpoint": "GET /api/posts/{id}", "issue": "_get_visible_post does not check expires_at, so an expired post can still be fetched by direct id (list endpoints filter it out correctly)."},
+      {"endpoint": "GET /api/posts", "issue": "Posts from authors whose Pro has lapsed stay visible. Pro status is only checked when posting. Probably acceptable, but worth noting."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "New post trade chips", "issue": "The poster's own trade is pre-selected. Tapping that chip (as a user naturally would) deselects it and disables Submit without saying why. Consider not toggling off on a second tap, or showing a hint.", "testID": "new-post-trade-plumber", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Work tab", "issues": ["work-new-post-button is 40px tall (<44)", "Segment buttons work-seg-* are 36px tall (<44)", "Compose chips (trade/duration/pay) are 40px tall (<44)"]},
+      {"screen": "Post card/detail", "issues": ["timeAgo floors at '1m ago', so a just-created post shows '1m ago'. Consider 'just now'."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_work_board_iter3.py", "/app/test_reports/pytest/pytest_iter3.xml"],
+  "action_items": [
+    "Review my fix in /app/backend/posts.py keen(), where expires_at is now made tz-aware. Check other places that compare Mongo datetimes with aware datetimes.",
+    "Make keen atomic: conditional $push with 'responders.user_id' $ne, and send the message only if modified",
+    "Optional: return 404 for expired posts in GET /api/posts/{id}",
+    "Optional: raise touch targets for the Post button, segments and chips to 44px",
+    "Optional: don't let the pre-selected trade chip toggle off silently in new-post"
+  ],
+  "critical_code_review_comments": [
+    "posts.py keen(): the comparison crashed on naive datetimes (fixed). The list filters use Mongo-side $gt comparisons, so they were fine.",
+    "Duration testIDs: '2+ weeks' becomes 'new-post-duration-2--weeks' because of the [\\s+] replace. It works, but the ID is awkward.",
+    "Require cycle warning: src/auth.tsx -> src/lib/revenuecat.tsx -> src/auth.tsx (shown in console)."
+  ],
+  "updated_files": ["/app/backend/posts.py", "/app/backend/tests/test_work_board_iter3.py"],
+  "success_rate": {"backend": "100% (15/15 after keen fix; 14/15 before)", "frontend": "100%"},
+  "seed_data_creation": "Temporary TEST_ users, sessions, connections, posts and messages were created and then deleted by id. The seed post post_ed254b85822c got a temporary responder from the UI keen test, which I removed ($pull). user_test2's location is unchanged (still unset).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run tests/test_work_board_iter3.py for Work board regressions. It creates and cleans up its own TEST_ Pro user and restores user_test2's location. Web login: localStorage session_token=JSON.stringify('test_token_2'), then reload and wait about 8s before the tabs render. To test as a third Pro user in the UI, insert a users doc with lifetime_pro:true, profile_complete:true and a user_sessions token.",
+  "rca_of_issue": "keen 500: Motor (no tz_aware) returns naive datetimes for expires_at. Comparing with datetime.now(timezone.utc) raised TypeError. Reproduced every time via the pytest keen test. Fixed by attaching tzinfo=UTC when it is missing."
+}

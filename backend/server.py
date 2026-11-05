@@ -77,6 +77,11 @@ INDEXES: dict[str, list[IndexModel]] = {
     ],
     "files": [IndexModel([("path", ASCENDING)], name="path", unique=True)],
     "invites": [IndexModel([("from_id", ASCENDING), ("created_at", DESCENDING)], name="from_time")],
+    "posts": [
+        IndexModel([("post_id", ASCENDING)], name="post_id", unique=True),
+        IndexModel([("user_id", ASCENDING), ("created_at", DESCENDING)], name="user_time"),
+        IndexModel([("expires_at", ASCENDING)], name="expires"),
+    ],
 }
 
 
@@ -754,6 +759,11 @@ async def conversations(user: dict = Depends(current_user)):
 
 
 app.include_router(api)
+
+import posts  # noqa: E402  (imports from this module; must come after the definitions above)
+
+api_posts = posts.router
+app.include_router(api_posts, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,

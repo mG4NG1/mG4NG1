@@ -97,6 +97,32 @@ export type CrewMember = Person & {
 export type Message = { message_id: string; from_id: string; to_id: string; text: string; created_at: string };
 export type SmsStatus = { messaging: boolean; verify: boolean };
 export type InviteResult = { results: { phone: string; ok: boolean; error?: string | null }[]; sent: number; remaining_today: number };
+
+export type PostType = "job" | "work";
+export type Post = {
+  post_id: string;
+  type: PostType;
+  trade: string;
+  title: string;
+  details?: string | null;
+  start?: string | null;
+  duration?: string | null;
+  pay_min?: number | null;
+  pay_max?: number | null;
+  suburb?: string | null;
+  created_at: string;
+  expires_at: string;
+  author: Person;
+  mine: boolean;
+  is_crew: boolean;
+  distance_km?: number | null;
+  keen: boolean;
+  keen_count: number;
+  responders: { user_id: string; name: string; picture?: string | null; picture_kind?: "photo" | "logo" | null; trade?: string | null; at: string }[];
+};
+export type PostOptions = { pay_bands: { min: number; max: number; label: string }[]; durations: string[]; trades: string[]; job_days: number; work_days: number };
+
+export const payLabel = (p: { pay_min?: number | null; pay_max?: number | null }) => (p.pay_min && p.pay_max ? `$${p.pay_min}-${p.pay_max}/hr` : "Pay negotiable");
 export type Conversation = {
   other: Person;
   last_text: string;

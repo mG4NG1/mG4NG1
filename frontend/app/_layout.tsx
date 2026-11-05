@@ -48,6 +48,7 @@ function Gate() {
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }}>
       <Stack.Screen name="paywall" options={{ presentation: "modal" }} />
+      <Stack.Screen name="post/new" options={{ presentation: "modal" }} />
     </Stack>
   );
 }

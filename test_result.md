@@ -177,3 +177,24 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: "Test users seeded via /app/backend/seed_test_users.py (tokens in /app/memory/test_credentials.md). Web preview: localStorage.setItem('session_token', JSON.stringify('test_token_1')) then reload. Twilio not configured by design yet — verify graceful 503s, not failures."
+
+# --- Iteration 3: Work board (jobs + looking-for-work broadcasts) ---
+backend:
+  - task: "Posts API (/api/posts list/create/get/keen/close, /api/posts/options, /api/posts/by-user/{id}) – Pro only, visible to crew + within 25 km"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/posts.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+frontend:
+  - task: "Work tab, New post composer (/post/new), Post detail (/post/[id]) with I'm keen + close, person board"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/work.tsx, /app/frontend/app/post/new.tsx, /app/frontend/app/post/[id].tsx, /app/frontend/src/components/post-card.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+agent_communication:
+  - agent: "main"
+    message: "user_test2 (test_token_2) is lifetime Pro; user_test1 (test_token_1) is free and must get 402 on /api/posts. For visibility tests, make the two users crew (accept the pending request) or set both approx_lat/approx_lng via POST /api/location."
