@@ -1,0 +1,126 @@
+{
+  "app_name": "SubbieNet",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A highly functional, no-nonsense utility that balances corporate clarity with high-visibility construction motifs.",
+  "color": {
+    "surface": "#F2F2F7",
+    "onSurface": "#1C1C1E",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#1C1C1E",
+    "surfaceTertiary": "#E5E5EA",
+    "onSurfaceTertiary": "#3A3A3C",
+    "surfaceInverse": "#1C1C1E",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#E68A00",
+    "brandPrimary": "#E68A00",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#2C2C2E",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#FDE6C7",
+    "onBrandTertiary": "#8A5200",
+    "success": "#34C759",
+    "onSuccess": "#FFFFFF",
+    "warning": "#FFCC00",
+    "onWarning": "#1C1C1E",
+    "error": "#FF3B30",
+    "onError": "#FFFFFF",
+    "info": "#E68A00",
+    "onInfo": "#FFFFFF",
+    "border": "#C6C6C8",
+    "borderStrong": "#8E8E93",
+    "divider": "#E5E5EA",
+    "muted": "#8E8E93",
+    "onBrand": "#FFFFFF"
+  },
+  "typography": {
+    "displayFontFamily": "Geist",
+    "textFontFamily": "Geist",
+    "scale": { "sm": 12, "base": 14, "lg": 16, "xl": 20, "2xl": 24 }
+  },
+  "spacing": { 
+    "rule": "Use comfortable iOS-native rhythms. 16pt outer margins, 12pt gaps between cards.", 
+    "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 24, "2xl": 32, "3xl": 48 
+  },
+  "radius_tokens": { "sm": 6, "md": 12, "lg": 20, "pill": 999 },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Ionicons",
+  "glassmorphism": {
+    "enabled": "true",
+    "do's": ["Bottom tab bar", "Sticky header backgrounds over scrolling lists", "Bottom sheet handles"],
+    "dont's": ["Form inputs", "List rows", "Data-heavy cards"]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Onboarding",
+      "purpose": "Google sign-in and profile setup (trade category, mobile number, business name).",
+      "states": { "loading": "Centered brand spinner", "empty": "N/A", "error": "Toast with retry option" },
+      "layout": "Full-bleed background image with vertical gradient scrim (transparent to 80% surfaceInverse). Content anchored bottom: Logo, Title, Google Sign-In button, and brief value prop."
+    },
+    {
+      "name": "Crew Directory (Home)",
+      "purpose": "Search contacts, add subcontractors, and view the accepted network.",
+      "states": { "loading": "Skeleton list rows", "empty": "Illustration of tools + 'Sync contacts to build your crew' CTA", "error": "Retry button" },
+      "layout": "Persistent search bar at top (glass header). Horizontal scrolling filter chips (trade categories) below it. Vertical list of contacts (Avatar, Name, Trade). Unpaid users see padlock icon on 'My Crew' full list and are prompted to upgrade."
+    },
+    {
+      "name": "Radar (Nearby & Map)",
+      "purpose": "Locate nearby subbies within 25km and view accepted contacts.",
+      "states": { "loading": "Map loading state", "empty": "Map empty state with 'No subbies nearby' overlay", "error": "Location permission error state" },
+      "layout": "Full-screen MapView showing approximate areas to protect privacy. Custom marker pins for subbies. A draggable bottom sheet reveals a list of nearby workers with a quick 'Looking for work?' action button. Free users see locked map state indicating they need Pro to search nearby strangers."
+    },
+    {
+      "name": "Inbox",
+      "purpose": "Manage connection requests and chats.",
+      "states": { "loading": "Skeleton rows", "empty": "Empty inbox text 'No messages yet'", "error": "Standard error prompt" },
+      "layout": "Segmented control at top ('Chats' | 'Requests'). Requests tab has Accept/Decline buttons. Chats tab shows conversation list. Free users have disabled 'New Chat' FAB (can reply only)."
+    },
+    {
+      "name": "Profile",
+      "purpose": "Manage business details and convert to Pro.",
+      "states": { "loading": "Spinner", "empty": "N/A", "error": "Payment failed alert" },
+      "layout": "Profile header with avatar and business details. A prominent 'Pro' card with a solid brand-color gradient. Tapping opens a full-screen Paywall modal: Hero image, checkmark feature list (Nearby Search, Initiate Chats, See who accepted), and a sticky $2.99/week subscribe button at bottom with 'Restore Purchases'."
+    }
+  ],
+  "images": {
+    "onboarding_bg": {
+      "url": "https://images.unsplash.com/photo-1579847188804-ecba0e2ea330?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzl8MHwxfHNlYXJjaHwyfHxjb25zdHJ1Y3Rpb24lMjBzaXRlJTIwd29ya2VycyUyMGJ1aWxkaW5nfGVufDB8fHx8MTc5Mzg0NzEzOXww&ixlib=rb-4.1.0&q=85",
+      "alt": "Silhouetted construction workers at sunset"
+    },
+    "paywall_hero": {
+      "url": "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzl8MHwxfHNlYXJjaHwxfHxjb25zdHJ1Y3Rpb24lMjBzaXRlJTIwd29ya2VycyUyMGJ1aWxkaW5nfGVufDB8fHx8MTc5Mzg0NzEzOXww&ixlib=rb-4.1.0&q=85",
+      "alt": "Construction workers standing on a site"
+    },
+    "empty_state_tools": {
+      "url": "https://images.unsplash.com/reserve/oIpwxeeSPy1cnwYpqJ1w_Dufer%20Collateral%20test.jpg?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NjZ8MHwxfHNlYXJjaHwxfHxjYXJwZW50cnklMjB0b29scyUyMGxheW91dHxlbnwwfHx8fDE3OTM4NDcxMzl8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Vintage carpentry tools on wooden planks"
+    }
+  },
+  "haptics": {
+    "tab_press": "light",
+    "segmented_control_switch": "selection",
+    "primary_button_press": "medium",
+    "accept_decline_request": "medium",
+    "paywall_subscribe_success": "success"
+  },
+  "instructions_to_main_agent": [
+    "Use standard iOS-native patterns: large headers, segmented controls, and comfortable list padding. The app must feel like a native corporate utility, easy for non-tech-savvy users.",
+    "Implement a strict gradient-to-dark scrim pattern (transparent to >=80% surfaceInverse) whenever text overlays the onboarding or paywall hero images.",
+    "Map/Nearby functionality is a core driver for the $2.99/wk Pro tier. Lock 'Nearby Search', 'Initiate Chats', and 'See Who Accepted' behind Paywall checks. Free users should see locked UI (e.g., padlock icons) as an upsell tease.",
+    "Ensure the 'quick message' button ('Looking for work?') is prominent on the bottom sheet in the Radar tab.",
+    "Do NOT use blue, indigo, or purple anywhere. The primary brand color is a high-visibility Safety Amber (#E68A00) paired with deep charcoal to represent the construction/trade industry context securely.",
+    "Ensure Map View obscures exact locations, providing an 'approximate area only' visualization for privacy."
+  ]
+}

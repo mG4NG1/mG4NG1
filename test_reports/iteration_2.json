@@ -1,0 +1,38 @@
+{
+  "summary": "Retest of Edit profile plus the new server-side Pro gating and picture removal. Backend: 8/8 new pytest cases pass. Free user gets 402 on GET /nearby and GET /connections. Starting a new chat returns 402 'Upgrade to Pro to start new chats'. Replying after the other person sends an inserted incoming message returns 200, and the reply is saved. PUT /profile with business_name as a free user returns 200 but business_name stays null. DELETE /profile/picture makes the old /api/files URL return 404 (?token= and Bearer). Frontend: Edit profile now opens from menu-edit-profile and profile-avatar with no bounce to Crew (checked 6s). Title 'Edit profile', back button, picture-picker, photo/logo toggle (logo hides Take photo), choose button all present. phone-verify is hidden, the business input is read-only for the free user, and saving the bio returns to Profile with the new bio shown. Regression smoke passed: Crew (locked card + stats + request banner), Inbox Accept and Decline, Find 'Jack' -> person page (locked contact), chat-locked with upgrade button, /invite SMS-off notice. No deprecated Expo packages were checked in this run, and no page errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/profile/picture", "issue": "Uploading a new picture over an existing one does not mark the previous files record removed, so the old URL stays reachable (verified: old user_test1 png returned 200 with test_token_2 after replacement). Only DELETE hides it. server.py:413-416."},
+      {"endpoint": "is_pro (server.py:250-274)", "issue": "Only RevenueCat HTTP 200 is treated as success. GET /v1/subscribers returns 201 for unknown ids and creates that subscriber in RevenueCat as a side effect (backend logs show 201 for user_test2 and the TEST_ user). Harmless for free users, but it creates junk subscribers. Also, if RevenueCat fails with no cache entry, pro=False is cached for 60s, so paying users get 402 during an outage. Consider r.is_success and not caching a failed lookup."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "onboarding.tsx back/save (edit mode)", "issue": "Opening /onboarding directly (refresh or deep link) leaves no history, so tapping profile-edit-back-button does nothing; you stay on /onboarding. Save in edit mode also calls router.back() and has the same dead end. Use router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'). onboarding.tsx:48,61", "testID": "profile-edit-back-button", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Edit profile", "issues": ["Touch targets are 40px tall, under the 44px minimum: picture-kind-photo (71x40), picture-kind-logo (57x40), profile-trade-* chips (h=40). picture-picker.tsx:129, onboarding.tsx:167", "picture-remove-button is 36x36 (uses hitSlop 8, but the visual target is under 44). picture-picker.tsx:134"]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_pro_gating_iter2.py", "/app/test_reports/pytest/pytest_iter2.xml"],
+  "action_items": [
+    "onboarding.tsx: when there is no history, the back button and edit-mode save should fall back to router.replace('/(tabs)/profile')",
+    "upload_picture: mark the previous picture_path record removed:true when a new picture replaces it",
+    "is_pro: accept any 2xx RevenueCat response and don't cache a failed (exception) lookup as non-Pro",
+    "Raise the segBtn and tradeOpt heights to 44, and the remove button to 44x44"
+  ],
+  "critical_code_review_comments": [
+    "server.py is 767 lines, over the 700-line guideline; consider splitting it into routers (profile/files, sms, connections, messages)",
+    "is_pro does `import time` inside the function on every call; move it to module level",
+    "Free-user reply rule works per conversation (any earlier message from the other person unlocks the chat for good). Intended per the spec."
+  ],
+  "updated_files": ["/app/backend/tests/test_pro_gating_iter2.py (new)"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% of requested flows; 1 minor navigation dead end on deep link"},
+  "seed_data_creation": "A temporary TEST_ user, session and messages were inserted in Mongo by the pytest fixture and deleted afterwards. The test1<->test2 connection conn_7ba7177fa5d5 was accepted, then declined in the UI, then reset to pending. user_test1's bio was reset to null. user_test1's picture was replaced and then deleted by the test; picture/picture_path were restored to the previous file (picture_kind set to 'photo'). A TEST_ uploaded file record (removed:true) remains in db.files.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Both seeded users are free (RevenueCat REST key set; RC returns no 'pro' entitlement). Login on web: localStorage session_token=JSON.stringify('test_token_1'). The pending request user_test2->user_test1 (conn_7ba7177fa5d5) is used for the Accept/Decline UI tests; reset its status to 'pending' afterwards. Run tests/test_pro_gating_iter2.py for gating regressions."
+}

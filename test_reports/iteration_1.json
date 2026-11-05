@@ -1,0 +1,51 @@
+{
+  "summary": "Backend: 20/20 pytest pass (auth/me new fields, picture upload/serve/delete via object storage, SMS-unconfigured 503s, invites per-number errors, contacts/check, settings toggle, profile phone reset, search, request->accept, connections, messages, conversations, nearby 400 + location). Frontend (390x844 web): session injection -> crew-screen OK; Profile header/avatar (uploaded logo renders via ?token=), menu rows, privacy note OK, sms-alerts-row hidden OK; Invite screen shows invite-sms-off + back works; Find people 'Jack' -> Jack Mason with Accept; person page OK; free-tier chat shows chat-locked; Inbox Requests (1) with Accept/Decline, Accept works and stats update. CRITICAL: Edit profile screen (/onboarding) is unreachable for completed profiles - the root Gate immediately redirects back to tabs, so picture-picker / Save changes could NOT be tested in the UI. Deprecated import detected: expo-router/unstable-native-tabs.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/messages, PUT /api/profile (business_name), GET /api/nearby, GET /api/connections", "issue": "Pro gating is client-side only. Backend never checks subscription: a free user can start chats via API (verified: user_test1 free -> POST /messages 200 to someone who never messaged them), set business_name, call /nearby and read crew list with phones. Needs server-side entitlement check (RevenueCat REST / webhook-stored entitlement).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "DELETE /api/profile/picture", "issue": "Only nulls user fields; storage object and db.files record are left behind (orphaned files, still fetchable by any signed-in user via old URL)."},
+      {"endpoint": "GET /api/files/{path}?token=", "issue": "Full 7-day session token is placed in image URLs on web (leaks via logs/history/referrer). Consider a short-lived signed file token."},
+      {"endpoint": "POST /api/invites", "issue": "Each failed attempt writes an invites row with status=failed even when SMS is not configured; no cleanup/dedupe."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Root Gate (app/_layout.tsx:36)", "issue": "`else if (!first || first === 'login' || first === 'onboarding') router.replace('/(tabs)')` fires for users with profile_complete=true, so router.push('/onboarding') from menu-edit-profile AND profile-avatar bounces straight back to Crew tab. Direct URL /onboarding also redirects. Edit profile, picture picker, business/bio editing and phone-verify are unreachable. Fix: only redirect from 'onboarding' right after first-time completion (e.g. in onboarding save(): if !editing router.replace('/(tabs)')) and drop 'onboarding' from the Gate condition.", "testID": "menu-edit-profile, profile-avatar, picture-picker, profile-save-button", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [
+      {"flow": "Edit profile -> upload picture -> Save changes", "issue": "Not testable in UI due to redirect bug above (backend upload endpoint itself works).", "affected_testIDs": ["picture-kind-photo", "picture-kind-logo", "picture-choose-button", "profile-save-button"]}
+    ],
+    "design_issues": [
+      {"screen": "Person page (app/person/[id].tsx)", "issues": ["Trade badge 'Plumber' is left-aligned while avatar and name are centered (badge stretches/aligns to start)."]},
+      {"screen": "Inbox requests", "issues": ["Accept/Decline buttons are 36px tall (<44px touch target)."]},
+      {"screen": "Edit profile picture picker (code review)", "issues": ["picture-kind segment buttons height 30px (<44px)."]},
+      {"screen": "Find people", "issues": ["Web focus outline renders a hard black rectangle inside the rounded search field (outlineStyle not suppressed on web)."]},
+      {"screen": "Profile header", "issues": ["Logo-kind avatar (rounded square) sits inside a circular white ring, corners look clipped/odd."]}
+    ],
+    "react_native_issues": [
+      {"component": "NativeTabs import", "issue": "Deprecated import `expo-router/unstable-native-tabs` (console warning: use `expo-router/native-tabs`). Reference: /app/frontend/app/(tabs)/_layout.tsx:3"}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_subbienet_api.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "CRITICAL: Fix Gate redirect in app/_layout.tsx:36 so completed users can open /onboarding (Edit profile); move post-onboarding navigation into onboarding save() for first-time users.",
+    "HIGH: Enforce Pro entitlement server-side for starting chats (POST /messages when other hasn't messaged), business_name, /nearby, /connections crew details.",
+    "Replace `expo-router/unstable-native-tabs` with `expo-router/native-tabs` in app/(tabs)/_layout.tsx.",
+    "Delete storage object/db.files record on DELETE /profile/picture (or on replacement upload).",
+    "Bump Accept/Decline and picture-kind segment touch targets to >=44px; center trade badge on person page."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 721 lines (>700) - split into routers (auth, profile/pictures, sms/invites, connections, messages).",
+    "Picture served to any signed-in user regardless of relation - acceptable for display pictures but old/deleted pictures remain accessible.",
+    "Search /contacts/check exposes which numbers are members (enumeration) to any user - consider rate limiting."
+  ],
+  "updated_files": ["/app/backend/tests/test_subbienet_api.py (new)"],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "~85% (all requested flows pass except Edit profile/picture-picker which is unreachable)"},
+  "seed_data_creation": "No new users. Test suite uploads a 1x1 PNG logo for user_test1 (left in place), toggles sms_alerts back to true, restores phone 0412000001, unsets location fields, deletes its own messages; connection user_test2->user_test1 restored to pending after accept tests. Cleaned 5 failed invite rows (from_id user_test1, to_key 412999999) - 4 were mine, 1 may have pre-existed from main agent testing.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: cd /app && python -m pytest backend/tests/test_subbienet_api.py -q (backend/pytest.ini uses xdist -n; suite is idempotent and restores state). Web login: localStorage.setItem('session_token', JSON.stringify('test_token_1')) then reload. After Gate fix, retest menu-edit-profile -> picture-picker (file chooser upload works via page.expect_file_chooser on picture-choose-button), phone-verify hidden, Save changes -> back to profile-screen.",
+  "rca_of_issue": "Edit profile redirect: Gate useEffect in app/_layout.tsx runs on every segment change; for user.profile_complete=true and segments[0]==='onboarding' it calls router.replace('/(tabs)'). Repro: login as test_token_1 -> Profile -> 'Edit profile, picture & business' -> lands back on Crew (URL '/'), picture-picker never visible. Mitigation: remove 'onboarding' from that condition and have onboarding.tsx save() call router.replace('/(tabs)') when !editing."
+}

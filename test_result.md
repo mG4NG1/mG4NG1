@@ -101,3 +101,79 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+user_problem_statement: "SubbieNet – subcontractor crew app. Free: be found/added, reply to messages. Pro ($2.99/wk via RevenueCat): initiate chats, business profile, crew map (approx areas), nearby search 25 km. New this round: Twilio SMS (invites, phone verification code, crew-request text alert), display picture (portrait photo or business logo via Emergent Object Storage), private contact lists."
+
+backend:
+  - task: "Display picture upload/serve (POST/DELETE /api/profile/picture, GET /api/files/{path}?token=)"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py, /app/backend/storage.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Uploads to Emergent Object Storage; picture stored as /api/files/<path>; read requires bearer header or ?token=. Curl verified 200/401."
+  - task: "Twilio SMS endpoints (GET /api/sms/status, POST /api/phone/send-code, POST /api/phone/verify, POST /api/invites, PUT /api/settings, POST /api/contacts/check)"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/server.py, /app/backend/sms.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Twilio creds NOT yet configured: send-code/invites must return 503 'Text messaging isn't set up yet' (invites per-number error). Crew request alert is a background task that no-ops without Twilio."
+frontend:
+  - task: "Profile screen (Facebook-style header, verified badge, SMS toggle, privacy note, invite menu)"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/profile.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "SMS toggle row only shows when /sms/status messaging=true (hidden now)."
+  - task: "Onboarding picture picker + phone verify"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/onboarding.tsx, /app/frontend/src/components/picture-picker.tsx, /app/frontend/src/components/phone-verify.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "PhoneVerify hidden when verify not configured. Picture picker uploads via uploadForm."
+  - task: "Invite screen (/invite)"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/invite.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Shows 'Text invites aren't switched on yet' notice while Twilio unconfigured."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+
+test_plan:
+  current_focus:
+    - "All backend endpoints incl. existing crew/messages/search"
+    - "Frontend: login gate, profile, edit profile picture picker, invite screen, find, inbox, chat reply-only gating"
+  stuck_tasks: []
+  test_all: true
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Test users seeded via /app/backend/seed_test_users.py (tokens in /app/memory/test_credentials.md). Web preview: localStorage.setItem('session_token', JSON.stringify('test_token_1')) then reload. Twilio not configured by design yet — verify graceful 503s, not failures."
