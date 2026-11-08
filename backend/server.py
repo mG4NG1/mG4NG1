@@ -3,6 +3,7 @@ import logging
 import math
 import os
 import re
+import secrets
 import uuid
 from contextlib import suppress
 from datetime import datetime, timedelta, timezone
@@ -17,6 +18,9 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
 from pymongo import ASCENDING, DESCENDING, IndexModel
 from starlette.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport.requests import Request as GoogleAuthRequest
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -43,7 +47,7 @@ mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
 
-EMERGENT_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
+GOOGLE_CLIENT_IDS = {v.strip() for v in os.environ.get("GOOGLE_CLIENT_IDS", "").split(",") if v.strip()}
 NEARBY_RADIUS_KM = 25
 TRADES = [
     "Electrician", "Carpenter", "Plumber", "Steelfixer", "Concreter", "Landscaper",
@@ -137,8 +141,8 @@ class CrewMember(PublicUser):
     connection_id: str
 
 
-class SessionIn(BaseModel):
-    session_id: str
+class GoogleLoginIn(BaseModel):
+    id_token: str = Field(min_length=50, max_length=8192)
 
 
 class ProfileIn(BaseModel):
@@ -315,31 +319,57 @@ def to_person(u: dict, cmap: dict, distance: Optional[float] = None) -> PersonOu
 
 
 # ---------------- Auth ----------------
-@api.post("/auth/session")
-async def auth_session(body: SessionIn):
-    async with httpx.AsyncClient(timeout=15) as hc:
-        r = await hc.get(EMERGENT_SESSION_URL, headers={"X-Session-ID": body.session_id})
-    if r.status_code != 200:
-        raise HTTPException(401, "Invalid session_id")
-    data = r.json()
+def verify_google_login(raw_token: str) -> dict:
+    """Verify Google's cryptographic signature, expiry, issuer and expected OAuth client."""
+    if not GOOGLE_CLIENT_IDS:
+        raise HTTPException(503, "Google sign-in has not been configured on the server")
+    try:
+        claims = google_id_token.verify_oauth2_token(raw_token, GoogleAuthRequest())
+    except Exception:
+        raise HTTPException(401, "Google sign-in token is invalid or expired")
+    if claims.get("aud") not in GOOGLE_CLIENT_IDS:
+        raise HTTPException(401, "Google sign-in token has the wrong audience")
+    if claims.get("iss") not in ("accounts.google.com", "https://accounts.google.com"):
+        raise HTTPException(401, "Google sign-in issuer is invalid")
+    if claims.get("email_verified") not in (True, "true"):
+        raise HTTPException(401, "Google account email is not verified")
+    if not claims.get("sub") or not claims.get("email"):
+        raise HTTPException(401, "Google account is missing required information")
+    return claims
+
+
+@api.post("/auth/google")
+async def auth_google(body: GoogleLoginIn):
+    data = await run_in_threadpool(verify_google_login, body.id_token)
     email = data["email"].strip().lower()
+    google_sub = data["sub"]
     now = datetime.now(timezone.utc)
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    # Match a previously registered Google account by its verified email so
+    # users keep their crew connections and RevenueCat user_id after migration.
+    existing = await db.users.find_one({"google_sub": google_sub}, {"_id": 0})
+    if not existing:
+        existing = await db.users.find_one({"email": email}, {"_id": 0})
+        if existing and existing.get("google_sub") not in (None, google_sub):
+            raise HTTPException(409, "This email belongs to another Google account")
     if existing:
         user_id = existing["user_id"]
-        await db.users.update_one({"user_id": user_id}, {"$set": {"picture": data.get("picture")}})
+        update = {"google_sub": google_sub}
+        # Preserve a profile photo previously uploaded by the user.
+        if not existing.get("picture_path") and data.get("picture"):
+            update["picture"] = data["picture"]
+        await db.users.update_one({"user_id": user_id}, {"$set": update})
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
         await db.users.insert_one({
-            "user_id": user_id, "email": email, "name": data.get("name") or "",
-            "picture": data.get("picture"), "profile_complete": False, "created_at": now,
+            "user_id": user_id, "google_sub": google_sub, "email": email,
+            "name": data.get("name") or "", "picture": data.get("picture"),
+            "profile_complete": False, "created_at": now,
         })
-    token = data["session_token"]
-    await db.user_sessions.update_one(
-        {"session_token": token},
-        {"$set": {"session_token": token, "user_id": user_id, "expires_at": now + timedelta(days=7), "created_at": now}},
-        upsert=True,
-    )
+    token = secrets.token_urlsafe(48)
+    await db.user_sessions.insert_one({
+        "session_token": token, "user_id": user_id,
+        "expires_at": now + timedelta(days=7), "created_at": now,
+    })
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     return {"session_token": token, "user": full_user(user).model_dump()}
 
