@@ -16,7 +16,6 @@ from fastapi.responses import Response
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
 from pymongo import ASCENDING, DESCENDING, IndexModel
-from starlette.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
 
 ROOT_DIR = Path(__file__).parent
@@ -397,7 +396,7 @@ async def upload_picture(file: UploadFile = File(...), kind: str = Form("photo")
     ext = {"image/png": "png", "image/webp": "webp", "image/gif": "gif"}.get(ctype, "jpg")
     path = f"{storage.APP_NAME}/uploads/{user['user_id']}/{uuid.uuid4().hex}.{ext}"
     try:
-        await run_in_threadpool(storage.put_object, path, data, ctype)
+        await storage.put_object(db, path, data, ctype)
     except storage.StorageError as exc:
         raise HTTPException(exc.status, str(exc))
     except Exception as exc:
@@ -432,7 +431,7 @@ async def get_file(path: str, request: Request, token: Optional[str] = None):
     if not rec:
         raise HTTPException(404, "File not found")
     try:
-        content, ctype = await run_in_threadpool(storage.get_object, path)
+        content, ctype = await storage.get_object(db, path)
     except storage.StorageError as exc:
         raise HTTPException(exc.status, str(exc))
     return Response(content=content, media_type=rec.get("content_type") or ctype,
@@ -670,10 +669,6 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def start_index_build():
     app.state.index_task = asyncio.create_task(ensure_indexes())
-    try:
-        await run_in_threadpool(storage.init_storage)
-    except Exception as exc:
-        logger.warning("object storage init failed (will retry on first upload): %s", exc)
 
 
 @app.on_event("shutdown")
