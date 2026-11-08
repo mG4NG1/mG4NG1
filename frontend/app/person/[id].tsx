@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,6 +27,30 @@ export default function PersonScreen() {
   const board = useQuery({ queryKey: ["posts", "by-user", id], queryFn: () => api<Post[]>(`/posts/by-user/${id}`), enabled: isSubscribed });
   const member = crew.data?.find((m) => m.user_id === id);
   const p = person.data;
+  const reportMember = () => {
+    if (!id) return;
+    Alert.alert("Report member", "Report this account for inappropriate conduct?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Report", onPress: () => {
+        void api("/safety/report", {
+          method: "POST",
+          body: { user_id: id, reason: "Inappropriate member behaviour" },
+        }).then(() => Alert.alert("Report sent", "Thanks for your report."),
+          () => Alert.alert("Could not submit report", "Please try again."));
+      } },
+    ]);
+  };
+  const blockMember = () => {
+    if (!id) return;
+    Alert.alert("Block member", "Block requests and messages both ways and remove this member from your crew?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Block", style: "destructive", onPress: () => {
+        void api("/safety/block", { method: "POST", body: { user_id: id } })
+          .then(() => { Alert.alert("Blocked", "This member can no longer contact you through ChopOut."); router.back(); },
+            () => Alert.alert("Unable to block", "Please try again."));
+      } },
+    ]);
+  };
 
   return (
     <View style={s.root} testID="person-screen">
@@ -105,6 +129,10 @@ export default function PersonScreen() {
             ) : null}
           </View>
 
+          <View style={s.safetyActions}>
+            <Pressable testID="person-report-button" onPress={reportMember}><Text style={s.safetyText}>Report member</Text></Pressable>
+            <Pressable testID="person-block-button" onPress={blockMember}><Text style={s.safetyText}>Block member</Text></Pressable>
+          </View>
           {p.bio ? (
             <View style={s.card}>
               <Text style={s.cardLabel}>ABOUT</Text>
@@ -140,6 +168,8 @@ const useStyles = makeStyles((c) => ({
   lockRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: c.brandTertiary, padding: spacing.lg, borderRadius: radius.md },
   lockText: { flex: 1, color: c.onBrandTertiary, fontWeight: "600" },
   phone: { textAlign: "center", color: c.muted, fontSize: font.base },
+  safetyActions: { flexDirection: "row", justifyContent: "center", gap: spacing.xl, paddingVertical: spacing.md },
+  safetyText: { color: c.muted, fontSize: 13, textDecorationLine: "underline" },
   card: { margin: spacing.lg, padding: spacing.lg, backgroundColor: c.surfaceSecondary, borderRadius: radius.md, gap: spacing.sm },
   cardLabel: { fontSize: font.sm, fontWeight: "600", color: c.muted },
   bio: { fontSize: font.lg, color: c.onSurface, lineHeight: 22 },
