@@ -84,25 +84,6 @@ export default function ProfileScreen() {
         </Pressable>
 
         <View style={s.menu}>
-            <View style={s.menuRow} testID="sms-alerts-row">
-              <Ionicons name="chatbubble-outline" size={22} color={colors.onSurfaceTertiary} />
-              <View style={{ flex: 1 }}>
-                <Text style={s.menuText}>Text me about new crew requests</Text>
-                <Text style={s.menuSub}>{user.phone_verified ? "Sent to your verified mobile" : "Verify your mobile in Edit profile to receive texts"}</Text>
-              </View>
-              <Switch
-                testID="sms-alerts-switch"
-                value={user.sms_alerts}
-                onValueChange={toggleAlerts}
-                disabled={savingAlerts}
-                trackColor={{ true: colors.brandPrimary, false: colors.surfaceTertiary }}
-                thumbColor={colors.surfaceSecondary}
-              />
-            </View>
-          </View>
-        ) : null}
-
-        <View style={s.menu}>
           {rows.map((r, i) => (
             <Pressable key={r.label} testID={r.testID} onPress={r.onPress} style={({ pressed }) => [s.menuRow, i > 0 && s.menuBorder, pressed && { opacity: 0.6 }]}>
               <Ionicons name={r.icon} size={22} color={r.danger ? colors.error : colors.onSurfaceTertiary} />
