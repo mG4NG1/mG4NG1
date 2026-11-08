@@ -1,14 +1,11 @@
-import { useState } from "react";
-import { Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
-import { api, User } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { Avatar, Notice, TradeBadge, VerifiedBadge } from "@/src/components/ui";
-import { useSmsStatus } from "@/src/hooks";
 import { useSubscription } from "@/src/lib/revenuecat";
 import { usesNativeTabs } from "@/src/navigation";
 import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
@@ -19,25 +16,14 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
   const router = useRouter();
-  const { user, setUser, signOut, purchaseIdentityError } = useAuth();
+  const { user, signOut, purchaseIdentityError } = useAuth();
   const { isSubscribed, lifetimePro } = useSubscription();
-  const sms = useSmsStatus();
-  const [savingAlerts, setSavingAlerts] = useState(false);
   if (!user) return null;
-
-  const toggleAlerts = async (v: boolean) => {
-    setSavingAlerts(true);
-    try {
-      setUser(await api<User>("/settings", { method: "PUT", body: { sms_alerts: v } }));
-    } finally {
-      setSavingAlerts(false);
-    }
-  };
 
   const rows: { icon: React.ComponentProps<typeof Ionicons>["name"]; label: string; onPress: () => void; testID: string; danger?: boolean }[] = [
     { icon: "create-outline", label: "Edit profile, picture & business", onPress: () => router.push("/onboarding"), testID: "menu-edit-profile" },
     { icon: "person-add-outline", label: "Find people", onPress: () => router.push("/find"), testID: "menu-find-people" },
-    { icon: "chatbox-ellipses-outline", label: "Invite mates by text", onPress: () => router.push("/invite"), testID: "menu-invite" },
+    { icon: "chatbox-ellipses-outline", label: "Invite mates", onPress: () => router.push("/invite"), testID: "menu-invite" },
     { icon: "star-outline", label: isSubscribed ? "Manage Pro subscription" : "Upgrade to Pro", onPress: () => router.push("/paywall"), testID: "menu-subscription" },
     { icon: "log-out-outline", label: "Sign out", onPress: signOut, testID: "menu-sign-out", danger: true },
   ];
@@ -86,7 +72,7 @@ export default function ProfileScreen() {
         <Pressable onPress={() => router.push("/paywall")} testID="pro-card" style={s.proWrap}>
           <LinearGradient colors={[colors.brandPrimary, colors.onBrandTertiary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.pro}>
             <View style={{ flex: 1, gap: 4 }}>
-              <Text style={s.proTitle}>{lifetimePro ? "Lifetime Pro · on the house" : isSubscribed ? "SubbieNet Pro is active" : "Go Pro · $2.99/week"}</Text>
+              <Text style={s.proTitle}>{lifetimePro ? "Lifetime Pro · on the house" : isSubscribed ? "ChopOut Pro is active" : "Explore ChopOut Pro"}</Text>
               <Text style={s.proBody}>
                 {isSubscribed
                   ? "Full crew access, chat, calls, nearby search and business profile."
@@ -97,8 +83,7 @@ export default function ProfileScreen() {
           </LinearGradient>
         </Pressable>
 
-        {sms.data?.messaging ? (
-          <View style={s.menu}>
+        <View style={s.menu}>
             <View style={s.menuRow} testID="sms-alerts-row">
               <Ionicons name="chatbubble-outline" size={22} color={colors.onSurfaceTertiary} />
               <View style={{ flex: 1 }}>
