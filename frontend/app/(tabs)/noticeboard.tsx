@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, Text, TextInput, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
@@ -56,6 +56,24 @@ export default function Noticeboard() {
     } catch (e: any) { setError(e?.message ?? "Couldn't delete notice"); }
   };
 
+  const report = (n: CrewNotice) => {
+    Alert.alert("Report notice", "Send this notice to ChopOut moderation for review?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Report",
+        onPress: () => {
+          void api("/safety/report", {
+            method: "POST",
+            body: { user_id: n.author_id, notice_id: n.notice_id, reason: "Inappropriate noticeboard content" },
+          }).then(
+            () => Alert.alert("Report sent", "Thanks, we will review this notice."),
+            () => Alert.alert("Unable to report", "Please try again."),
+          );
+        },
+      },
+    ]);
+  };
+
   const remaining = (date: string) => {
     const hours = Math.max(0, Math.ceil((new Date(date).getTime() - Date.now()) / 3600000));
     return hours > 0 ? `Expires in ${hours}h` : "Expiring";
@@ -102,6 +120,11 @@ export default function Noticeboard() {
               {item.mine ? <Pressable onPress={() => remove(item.notice_id)} accessibilityLabel="Delete notice"><Ionicons name="trash-outline" size={22} color={colors.muted} /></Pressable> : null}
             </View>
             <Text style={s.message}>{item.text}</Text>
+            {!item.mine ? (
+              <Pressable accessibilityLabel="Report notice" onPress={() => report(item)}>
+                <Text style={s.report}>Report this notice</Text>
+              </Pressable>
+            ) : null}
             {!item.mine && isSubscribed ? (
               <Button
                 small
@@ -137,6 +160,7 @@ const useStyles = makeStyles((c) => ({
   meta: { color: c.muted, fontSize: font.sm },
   message: { color: c.onSurface, fontSize: 16, lineHeight: 24 },
   restricted: { color: c.muted, fontSize: 12, lineHeight: 18 },
+  report: { color: c.muted, fontSize: 12, textDecorationLine: "underline" },
   tip: { marginHorizontal: spacing.lg, marginBottom: spacing.lg, padding: spacing.md, backgroundColor: c.surfaceSecondary, flexDirection: "row", gap: spacing.sm, borderRadius: 12 },
   tipText: { flex: 1, color: c.onSurface },
   empty: { paddingTop: spacing.xl, textAlign: "center", color: c.muted },
