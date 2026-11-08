@@ -48,7 +48,8 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
 
 GOOGLE_CLIENT_IDS = {v.strip() for v in os.environ.get("GOOGLE_CLIENT_IDS", "").split(",") if v.strip()}
-NEARBY_RADIUS_KM = 25
+NEARBY_RADIUS_KM = 20
+LOCATION_MAX_AGE_HOURS = 24 * 7
 TRADES = [
     "Electrician", "Carpenter", "Plumber", "Steelfixer", "Concreter", "Landscaper",
     "Machine Operator", "Bricklayer", "Labourer", "Tiler", "Painter", "Roofer",
@@ -126,6 +127,7 @@ class FullUser(PublicUser):
     approx_lat: Optional[float] = None
     approx_lng: Optional[float] = None
     lifetime_pro: bool = False
+    radar_visible: bool = False
 
 
 class PersonOut(PublicUser):
@@ -159,6 +161,10 @@ class LocationIn(BaseModel):
     suburb: Optional[str] = Field(default=None, max_length=80)
 
 
+class RadarVisibilityIn(BaseModel):
+    visible: bool
+
+
 class ContactsIn(BaseModel):
     phones: List[str] = Field(max_length=5000)
 
@@ -186,9 +192,6 @@ class VerifyIn(PhoneIn):
 
 class InviteIn(BaseModel):
     phones: List[str] = Field(min_length=1, max_length=20)
-
-
-class SettingsIn(BaseModel):
 
 
 class MessageOut(BaseModel):
@@ -477,6 +480,14 @@ async def update_location(body: LocationIn, user: dict = Depends(current_user)):
     return full_user(await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0}))
 
 
+@api.put("/location/visibility", response_model=FullUser)
+async def set_radar_visibility(body: RadarVisibilityIn, user: dict = Depends(current_user)):
+    if body.visible and user.get("approx_lat") is None:
+        raise HTTPException(400, "Share your approximate area before enabling Radar")
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"radar_visible": body.visible}})
+    return full_user(await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0}))
+
+
 @api.get("/users/{user_id}", response_model=PersonOut)
 async def get_user(user_id: str, user: dict = Depends(current_user)):
     u = await db.users.find_one({"user_id": user_id, "profile_complete": True}, {"_id": 0})
@@ -530,16 +541,20 @@ async def check_contacts(body: ContactsIn, user: dict = Depends(pro_user)):
 async def nearby(trade: Optional[str] = None, user: dict = Depends(pro_user)):
     if user.get("approx_lat") is None:
         raise HTTPException(400, "Share your area first")
+    if not user.get("trade"):
+        raise HTTPException(400, "Choose your trade in your profile first")
     lat, lng = user["approx_lat"], user["approx_lng"]
     dlat = NEARBY_RADIUS_KM / 111.0
     dlng = NEARBY_RADIUS_KM / (111.0 * max(math.cos(math.radians(lat)), 0.01))
     flt: dict = {
         "user_id": {"$ne": user["user_id"]}, "profile_complete": True,
+        "radar_visible": True,
+        "location_at": {"$gte": datetime.now(timezone.utc) - timedelta(hours=LOCATION_MAX_AGE_HOURS)},
+        "trade": user.get("trade"),
         "approx_lat": {"$gte": lat - dlat, "$lte": lat + dlat},
         "approx_lng": {"$gte": lng - dlng, "$lte": lng + dlng},
     }
-    if trade:
-        flt["trade"] = trade
+    # Radar displays the viewer\u0027s own profession only.
     users = await db.users.find(flt, {"_id": 0}).limit(300).to_list(300)
     cmap = await connection_map(user["user_id"])
     res = []
