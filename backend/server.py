@@ -296,7 +296,7 @@ async def is_pro(user: dict) -> bool:
 
 async def pro_user(user: dict = Depends(current_user)) -> dict:
     if not await is_pro(user):
-        raise HTTPException(402, "SubbieNet Pro is required for this")
+        raise HTTPException(402, "ChopOut Pro is required for this")
     return user
 
 
@@ -487,7 +487,7 @@ async def get_user(user_id: str, user: dict = Depends(current_user)):
 
 # ---------------- Find people ----------------
 @api.get("/search", response_model=List[PersonOut])
-async def search(q: str = Query("", max_length=60), trade: Optional[str] = None, user: dict = Depends(current_user)):
+async def search(q: str = Query("", max_length=60), trade: Optional[str] = None, user: dict = Depends(pro_user)):
     flt: dict = {"profile_complete": True, "user_id": {"$ne": user["user_id"]}}
     q = q.strip()
     if q:
@@ -505,7 +505,7 @@ async def search(q: str = Query("", max_length=60), trade: Optional[str] = None,
 
 
 @api.post("/contacts/match", response_model=List[PersonOut])
-async def match_contacts(body: ContactsIn, user: dict = Depends(current_user)):
+async def match_contacts(body: ContactsIn, user: dict = Depends(pro_user)):
     keys = list({k for k in (phone_key(p) for p in body.phones) if k})
     if not keys:
         return []
@@ -517,7 +517,7 @@ async def match_contacts(body: ContactsIn, user: dict = Depends(current_user)):
 
 
 @api.post("/contacts/check")
-async def check_contacts(body: ContactsIn, user: dict = Depends(current_user)):
+async def check_contacts(body: ContactsIn, user: dict = Depends(pro_user)):
     """Which of these numbers already belong to members (last-9-digit keys only). Used to build the invite list."""
     keys = list({k for k in (phone_key(p) for p in body.phones) if k})
     if not keys:
@@ -553,7 +553,7 @@ async def nearby(trade: Optional[str] = None, user: dict = Depends(pro_user)):
 
 # ---------------- Connections ----------------
 @api.post("/connections/request", response_model=PersonOut)
-async def send_request(body: RequestIn, user: dict = Depends(current_user)):
+async def send_request(body: RequestIn, user: dict = Depends(pro_user)):
     me_id = user["user_id"]
     if body.user_id == me_id:
         raise HTTPException(400, "You can't add yourself")
