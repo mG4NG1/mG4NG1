@@ -1,16 +1,15 @@
-"""Emergent Managed Object Storage (profile photos / business logos). Sync helpers — use run_in_threadpool."""
+"""Private profile photo storage in the same MongoDB database as ChopOut.
+
+Uses Motor GridFS: no Emergent key, proxy or third-party object-store account.
+Images remain accessible only through the application's authenticated /api/files route.
+"""
 import logging
-import os
 
-import requests
+from gridfs.errors import NoFile
+from motor.motor_asyncio import AsyncIOMotorGridFSBucket
 
+APP_NAME = "chopout"
 logger = logging.getLogger(__name__)
-
-STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
-STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
-APP_NAME = "subbienet"
-
-_storage_key: str | None = None
 
 
 class StorageError(Exception):
@@ -19,45 +18,34 @@ class StorageError(Exception):
         self.status = status
 
 
-def init_storage() -> str:
-    global _storage_key
-    if _storage_key:
-        return _storage_key
-    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": os.environ.get("EMERGENT_LLM_KEY")}, timeout=30)
-    resp.raise_for_status()
-    _storage_key = resp.json()["storage_key"]
-    return _storage_key
+async def put_object(db, path: str, data: bytes, content_type: str) -> None:
+    bucket = AsyncIOMotorGridFSBucket(db, bucket_name="profile_images")
+    try:
+        upload = bucket.open_upload_stream(path, metadata={"content_type": content_type})
+        await upload.write(data)
+        await upload.close()
+    except Exception as exc:
+        logger.error("GridFS image upload failed: %s", exc)
+        raise StorageError(503, "Photo storage is temporarily unavailable") from exc
 
 
-def _reset_key():
-    global _storage_key
-    _storage_key = None
+async def get_object(db, path: str) -> tuple[bytes, str]:
+    bucket = AsyncIOMotorGridFSBucket(db, bucket_name="profile_images")
+    try:
+        stream = await bucket.open_download_stream_by_name(path)
+        contents = await stream.read()
+        return contents, (stream.metadata or {}).get("content_type", "application/octet-stream")
+    except NoFile as exc:
+        raise StorageError(404, "File not found") from exc
+    except Exception as exc:
+        logger.error("GridFS image download failed: %s", exc)
+        raise StorageError(503, "Photo storage is temporarily unavailable") from exc
 
 
-def put_object(path: str, data: bytes, content_type: str) -> dict:
-    for attempt in range(2):
-        key = init_storage()
-        resp = requests.put(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key, "Content-Type": content_type}, data=data, timeout=120)
-        if resp.status_code == 503 and attempt == 0:
-            _reset_key()
-            continue
-        if resp.status_code == 402:
-            raise StorageError(402, "Photo storage is out of credits right now. Please try again later.")
-        if not resp.ok:
-            logger.error("put_object(%s): %s %s", path, resp.status_code, resp.text[:200])
-            raise StorageError(502, "Couldn't save the photo. Please try again.")
-        return resp.json()
-    raise StorageError(503, "Photo storage is temporarily unavailable.")
-
-
-def get_object(path: str) -> tuple[bytes, str]:
-    for attempt in range(2):
-        key = init_storage()
-        resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
-        if resp.status_code == 503 and attempt == 0:
-            _reset_key()
-            continue
-        if not resp.ok:
-            raise StorageError(404, "File not found")
-        return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
-    raise StorageError(503, "Photo storage is temporarily unavailable.")
+async def delete_object(db, path: str) -> None:
+    bucket = AsyncIOMotorGridFSBucket(db, bucket_name="profile_images")
+    try:
+        stream = await bucket.open_download_stream_by_name(path)
+        await bucket.delete(stream._id)
+    except NoFile:
+        return
