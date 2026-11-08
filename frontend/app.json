@@ -72,7 +72,8 @@
           "cameraPermission": "Take a portrait photo for your profile"
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "@maplibre/maplibre-react-native"
     ],
     "experiments": {
       "typedRoutes": true
