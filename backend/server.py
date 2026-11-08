@@ -72,6 +72,8 @@ INDEXES: dict[str, list[IndexModel]] = {
         IndexModel([("to_id", ASCENDING), ("status", ASCENDING)], name="to_status"),
         IndexModel([("from_id", ASCENDING), ("status", ASCENDING)], name="from_status"),
     ],
+    "user_blocks": [IndexModel([("blocker_id", ASCENDING), ("blocked_id", ASCENDING)], name="pair", unique=True)],
+    "moderation_reports": [IndexModel([("created_at", DESCENDING)], name="created_at")],
     "messages": [
         IndexModel([("conv_key", ASCENDING), ("created_at", ASCENDING)], name="conv_time"),
         IndexModel([("participants", ASCENDING), ("created_at", DESCENDING)], name="participants_time"),
@@ -236,6 +238,17 @@ def haversine(lat1, lng1, lat2, lng2) -> float:
     dp, dl = math.radians(lat2 - lat1), math.radians(lng2 - lng1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 2 * r * math.asin(math.sqrt(a))
+
+
+async def ensure_not_blocked(a: str, b: str) -> None:
+    blocked = await db.user_blocks.find_one({
+        "$or": [
+            {"blocker_id": a, "blocked_id": b},
+            {"blocker_id": b, "blocked_id": a},
+        ]
+    }, {"_id": 1})
+    if blocked:
+        raise HTTPException(403, "Messaging and crew requests are unavailable between these members")
 
 
 def conv_key(a: str, b: str) -> str:
@@ -582,6 +595,7 @@ async def send_request(body: RequestIn, user: dict = Depends(pro_user)):
     me_id = user["user_id"]
     if body.user_id == me_id:
         raise HTTPException(400, "You can't add yourself")
+    await ensure_not_blocked(me_id, body.user_id)
     other = await db.users.find_one({"user_id": body.user_id, "profile_complete": True}, {"_id": 0})
     if not other:
         raise HTTPException(404, "User not found")
@@ -660,6 +674,7 @@ async def send_message(body: MessageIn, user: dict = Depends(current_user)):
     if not await db.users.find_one({"user_id": body.to_user_id}, {"_id": 1}):
         raise HTTPException(404, "User not found")
     key = conv_key(user["user_id"], body.to_user_id)
+    await ensure_not_blocked(user["user_id"], body.to_user_id)
     if not await is_pro(user):
         # Free members can only reply to someone who has messaged them first
         if not await db.messages.find_one({"conv_key": key, "from_id": body.to_user_id}, {"_id": 1}):
@@ -706,6 +721,9 @@ app.include_router(api)
 
 import noticeboard  # noqa: E402
 app.include_router(noticeboard.router, prefix="/api")
+
+import safety  # noqa: E402
+app.include_router(safety.router, prefix="/api")
 
 import posts  # noqa: E402  (imports from this module; must come after the definitions above)
 
