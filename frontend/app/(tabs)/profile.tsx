@@ -1,10 +1,11 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
 import { useAuth } from "@/src/auth";
+import { api } from "@/src/api";
 import { Avatar, Notice, TradeBadge, VerifiedBadge } from "@/src/components/ui";
 import { useSubscription } from "@/src/lib/revenuecat";
 import { usesNativeTabs } from "@/src/navigation";
@@ -20,12 +21,31 @@ export default function ProfileScreen() {
   const { isSubscribed, lifetimePro } = useSubscription();
   if (!user) return null;
 
+  const deleteAccount = () => {
+    Alert.alert(
+      "Delete ChopOut account?",
+      "This permanently deletes your account and associated live-service data. If you have Pro, cancel the subscription separately in Google Play.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete account", style: "destructive", onPress: async () => {
+          try {
+            await api("/account/delete", { method: "POST", body: { confirmation: "DELETE" } });
+            await signOut();
+          } catch {
+            Alert.alert("Deletion failed", "Please contact mamimo.support@gmail.com for assistance.");
+          }
+        } },
+      ],
+    );
+  };
+
   const rows: { icon: React.ComponentProps<typeof Ionicons>["name"]; label: string; onPress: () => void; testID: string; danger?: boolean }[] = [
     { icon: "create-outline", label: "Edit profile, picture & business", onPress: () => router.push("/onboarding"), testID: "menu-edit-profile" },
     { icon: "person-add-outline", label: "Find people", onPress: () => router.push("/find"), testID: "menu-find-people" },
     { icon: "chatbox-ellipses-outline", label: "Invite mates", onPress: () => router.push("/invite"), testID: "menu-invite" },
     { icon: "star-outline", label: isSubscribed ? "Manage Pro subscription" : "Upgrade to Pro", onPress: () => router.push("/paywall"), testID: "menu-subscription" },
     { icon: "log-out-outline", label: "Sign out", onPress: signOut, testID: "menu-sign-out", danger: true },
+    { icon: "trash-outline", label: "Delete account", onPress: deleteAccount, testID: "menu-delete-account", danger: true },
   ];
 
   return (
