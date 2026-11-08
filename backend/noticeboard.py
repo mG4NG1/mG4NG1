@@ -34,8 +34,16 @@ class NoticeOut(BaseModel):
 @router.get("", response_model=List[NoticeOut])
 async def feed(user: dict = Depends(current_user)):
     now = datetime.now(timezone.utc)
+    blocks = await db.user_blocks.find(
+        {"$or": [{"blocker_id": user["user_id"]}, {"blocked_id": user["user_id"]}]},
+        {"blocker_id": 1, "blocked_id": 1, "_id": 0},
+    ).to_list(5000)
+    hidden_ids = [
+        b["blocked_id"] if b["blocker_id"] == user["user_id"] else b["blocker_id"]
+        for b in blocks
+    ]
     rows = await db.crew_notices.find(
-        {"expires_at": {"$gt": now}},
+        {"expires_at": {"$gt": now}, "author_id": {"$nin": hidden_ids}},
         {"_id": 0},
     ).sort("created_at", DESCENDING).limit(100).to_list(100)
     return [
