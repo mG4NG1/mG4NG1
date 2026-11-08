@@ -59,7 +59,7 @@ export default function PersonScreen() {
 
           <View style={s.actions}>
             {notice ? <Notice text={notice} tone="success" testID="person-notice" /> : null}
-            {p.connection !== "connected" ? (
+            {p.connection !== "connected" && (isSubscribed || p.connection === "received" || p.connection === "sent") ? (
               p.connection === "sent" ? (
                 <Notice text="Crew request sent. You'll see when they accept with Pro." testID="person-request-sent" />
               ) : (
