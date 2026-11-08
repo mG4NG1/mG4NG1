@@ -68,7 +68,6 @@ export type User = {
   profile_complete: boolean;
   picture_kind?: "photo" | "logo" | null;
   phone_verified: boolean;
-  sms_alerts: boolean;
   lifetime_pro: boolean;
 };
 
@@ -96,7 +95,6 @@ export type CrewMember = Person & {
 
 export type Message = { message_id: string; from_id: string; to_id: string; text: string; created_at: string };
 export type SmsStatus = { messaging: boolean; verify: boolean };
-export type InviteResult = { results: { phone: string; ok: boolean; error?: string | null }[]; sent: number; remaining_today: number };
 
 export type PostType = "job" | "work";
 export type Post = {
