@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useRouter } from "expo-router";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, TextInput, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,6 +19,7 @@ type CrewNotice = {
 export default function Noticeboard() {
   const s = useStyles();
   const { colors } = useTheme();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
   const { user } = useAuth();
@@ -63,7 +65,7 @@ export default function Noticeboard() {
     <View style={s.root} testID="noticeboard-screen">
       <View style={[s.header, { paddingTop: insets.top + spacing.md }]}>
         <Text style={s.title}>Crew Noticeboard</Text>
-        <Text style={s.subtitle}>Only accepted crew can see each other's posts. Notices disappear after 48 hours.</Text>
+        <Text style={s.subtitle}>See what other tradies are posting. Notices disappear after 48 hours.</Text>
       </View>
       {isSubscribed ? (
         <View style={s.editor}>
@@ -72,18 +74,18 @@ export default function Noticeboard() {
             maxLength={500}
             value={draft}
             onChangeText={setDraft}
-            placeholder="What would you like your crew to know?"
+            placeholder="What would you like other tradies to know?"
             placeholderTextColor={colors.muted}
             style={s.input}
             testID="notice-draft"
           />
           <View style={s.editorBottom}>
             <Text style={s.counter}>{draft.length}/500</Text>
-            <Button small label="Post to crew" onPress={publish} loading={busy} disabled={!draft.trim()} testID="notice-publish" />
+            <Button small label="Post notice" onPress={publish} loading={busy} disabled={!draft.trim()} testID="notice-publish" />
           </View>
         </View>
       ) : (
-        <View style={s.tip}><Ionicons name="lock-closed-outline" color={colors.brandPrimary} size={20} /><Text style={s.tipText}>You can read notices from accepted crew. Upgrade to Pro to post your own.</Text></View>
+        <View style={s.tip}><Ionicons name="lock-closed-outline" color={colors.brandPrimary} size={20} /><Text style={s.tipText}>Free members can read notices and reply to incoming chats. Upgrade to Pro to post notices or contact other tradies first.</Text></View>
       )}
       {error ? <View style={s.error}><Notice tone="error" text={error} /></View> : null}
       {notices.isLoading ? <ActivityIndicator color={colors.brandPrimary} /> : null}
@@ -92,7 +94,7 @@ export default function Noticeboard() {
         keyExtractor={(n) => n.notice_id}
         refreshControl={<RefreshControl refreshing={notices.isRefetching} onRefresh={() => notices.refetch()} />}
         contentContainerStyle={{ gap: 12, paddingHorizontal: spacing.lg, paddingBottom: bottomChrome + spacing.xl }}
-        ListEmptyComponent={!notices.isLoading ? <Text style={s.empty}>No crew notices yet. Accepted friends' updates will appear here.</Text> : null}
+        ListEmptyComponent={!notices.isLoading ? <Text style={s.empty}>No notices yet. Pro members' updates will appear here.</Text> : null}
         renderItem={({ item }) => (
           <View style={s.card} testID={`notice-${item.notice_id}`}>
             <View style={s.cardTop}>
@@ -100,6 +102,19 @@ export default function Noticeboard() {
               {item.mine ? <Pressable onPress={() => remove(item.notice_id)} accessibilityLabel="Delete notice"><Ionicons name="trash-outline" size={22} color={colors.muted} /></Pressable> : null}
             </View>
             <Text style={s.message}>{item.text}</Text>
+            {!item.mine && isSubscribed ? (
+              <Button
+                small
+                variant="outline"
+                label="Message tradie"
+                icon="chatbubble-ellipses-outline"
+                onPress={() => router.push(`/chat/${item.author_id}`)}
+                testID={`notice-message-${item.notice_id}`}
+              />
+            ) : null}
+            {!item.mine && !isSubscribed ? (
+              <Text style={s.restricted}>Read-only on Free. A Pro member can message you first, then you can reply freely.</Text>
+            ) : null}
           </View>
         )}
       />
@@ -121,6 +136,7 @@ const useStyles = makeStyles((c) => ({
   name: { color: c.onSurface, fontSize: 17, fontWeight: "700" },
   meta: { color: c.muted, fontSize: font.sm },
   message: { color: c.onSurface, fontSize: 16, lineHeight: 24 },
+  restricted: { color: c.muted, fontSize: 12, lineHeight: 18 },
   tip: { marginHorizontal: spacing.lg, marginBottom: spacing.lg, padding: spacing.md, backgroundColor: c.surfaceSecondary, flexDirection: "row", gap: spacing.sm, borderRadius: 12 },
   tipText: { flex: 1, color: c.onSurface },
   empty: { paddingTop: spacing.xl, textAlign: "center", color: c.muted },
