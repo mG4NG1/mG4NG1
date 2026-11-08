@@ -76,6 +76,11 @@ INDEXES: dict[str, list[IndexModel]] = {
         IndexModel([("conv_key", ASCENDING), ("created_at", ASCENDING)], name="conv_time"),
         IndexModel([("participants", ASCENDING), ("created_at", DESCENDING)], name="participants_time"),
     ],
+    "crew_notices": [
+        IndexModel([("notice_id", ASCENDING)], name="notice_id", unique=True),
+        IndexModel([("expires_at", ASCENDING)], name="notices_ttl", expireAfterSeconds=0),
+        IndexModel([("author_id", ASCENDING), ("created_at", DESCENDING)], name="author_time"),
+    ],
     "files": [IndexModel([("path", ASCENDING)], name="path", unique=True)],
     "invites": [IndexModel([("from_id", ASCENDING), ("created_at", DESCENDING)], name="from_time")],
     "posts": [
@@ -698,6 +703,9 @@ async def conversations(user: dict = Depends(current_user)):
 
 
 app.include_router(api)
+
+import noticeboard  # noqa: E402
+app.include_router(noticeboard.router, prefix="/api")
 
 import posts  # noqa: E402  (imports from this module; must come after the definitions above)
 
