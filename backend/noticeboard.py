@@ -1,15 +1,15 @@
-"""48-hour crew-only noticeboard.
+"""48-hour members-only noticeboard.
 
-Pro members can publish notices. Their own posts and posts by accepted crew
-connections appear in the feed, regardless of the reader's subscription tier.
-Pending, declined and removed connections NEVER grant access.
+Any signed-in member can browse current notices, including people outside their
+crew. Only Pro members can publish. Messaging and crew-request entitlements are
+enforced independently by backend/server.py, not by the feed.
 """
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from pymongo import ASCENDING, DESCENDING, IndexModel
+from pymongo import DESCENDING
 from server import db, current_user, pro_user, iso
 
 router = APIRouter(prefix="/noticeboard")
@@ -31,22 +31,11 @@ class NoticeOut(BaseModel):
     mine: bool
 
 
-async def _crew_ids(user_id: str) -> set[str]:
-    ids = {user_id}
-    async for c in db.connections.find(
-        {"status": "accepted", "$or": [{"from_id": user_id}, {"to_id": user_id}]},
-        {"from_id": 1, "to_id": 1},
-    ):
-        ids.add(c["to_id"] if c["from_id"] == user_id else c["from_id"])
-    return ids
-
-
 @router.get("", response_model=List[NoticeOut])
 async def feed(user: dict = Depends(current_user)):
-    allowed = await _crew_ids(user["user_id"])
     now = datetime.now(timezone.utc)
     rows = await db.crew_notices.find(
-        {"author_id": {"$in": list(allowed)}, "expires_at": {"$gt": now}},
+        {"expires_at": {"$gt": now}},
         {"_id": 0},
     ).sort("created_at", DESCENDING).limit(100).to_list(100)
     return [
