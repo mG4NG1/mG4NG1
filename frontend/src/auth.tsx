@@ -1,14 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
-import * as Linking from "expo-linking";
-import * as WebBrowser from "expo-web-browser";
 import Purchases from "react-native-purchases";
-
 import { api, loadToken, setToken, setUnauthorizedHandler, TOKEN_KEY, User } from "@/src/api";
 import { rcEnabled } from "@/src/lib/revenuecat";
 import { storage } from "@/src/utils/storage";
-
-WebBrowser.maybeCompleteAuthSession();
 
 type AuthState = {
   user: User | null;
@@ -22,13 +17,7 @@ type AuthState = {
 };
 
 const Ctx = createContext<AuthState | null>(null);
-const AUTH_URL = "https://auth.emergentagent.com/?redirect=";
-
-function extractSessionId(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const m = url.match(/[?#&]session_id=([^&#]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<User | null>(null);
@@ -36,7 +25,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [purchaseIdentityError, setPurchaseIdentityError] = useState<string | null>(null);
-  const sent = useRef(new Set<string>());
   const rcIdentityRef = useRef<string | null>(null);
 
   const clearSession = useCallback(async () => {
@@ -45,72 +33,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserState(null);
   }, []);
 
-  const exchange = useCallback(async (sessionId: string) => {
-    if (sent.current.has(sessionId)) return false;
-    sent.current.add(sessionId);
-    try {
-      const res = await api<{ session_token: string; user: User }>("/auth/session", {
-        method: "POST",
-        body: { session_id: sessionId },
-      });
-      await storage.secureSet(TOKEN_KEY, res.session_token);
-      setToken(res.session_token);
-      setUserState(res.user);
-      setError(null);
-      return true;
-    } catch (e: any) {
-      setError(e?.message ?? "Sign-in failed");
-      return false;
-    }
-  }, []);
-
   useEffect(() => {
-    setUnauthorizedHandler(() => {
-      clearSession();
-    });
-    let sub: { remove: () => void } | undefined;
+    setUnauthorizedHandler(() => { void clearSession(); });
+    let cancelled = false;
     (async () => {
-      // 1. Process session_id from redirect first
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        const sid = extractSessionId(window.location.href);
-        if (sid) {
-          const ok = await exchange(sid);
-          if (ok) {
-            const url = new URL(window.location.href);
-            url.searchParams.delete("session_id");
-            const hash = url.hash.replace(/^#/, "").split("&").filter((p) => !p.startsWith("session_id=")).join("&");
-            url.hash = hash ? `#${hash}` : "";
-            window.history.replaceState(window.history.state, "", url.toString());
-            setLoading(false);
-            return;
-          }
-        }
-      } else {
-        const initial = extractSessionId(await Linking.getInitialURL());
-        if (initial && (await exchange(initial))) {
-          setLoading(false);
-          return;
-        }
-        sub = Linking.addEventListener("url", ({ url }) => {
-          const sid = extractSessionId(url);
-          if (sid) exchange(sid);
-        });
-      }
-      // 2. Existing session
       const t = await loadToken();
       if (t) {
         try {
-          setUserState(await api<User>("/auth/me"));
+          const result = await api<User>("/auth/me");
+          if (!cancelled) setUserState(result);
         } catch {
           await clearSession();
         }
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     })();
-    return () => sub?.remove();
-  }, [exchange, clearSession]);
+    return () => { cancelled = true; };
+  }, [clearSession]);
 
-  // Bind RevenueCat identity to our stable user id on every auth path
+  // RevenueCat is bound to the stable server-side account ID, not to a device.
   useEffect(() => {
     if (!rcEnabled) return;
     (async () => {
@@ -131,41 +72,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async () => {
     setError(null);
-    if (Platform.OS === "web") {
-      const redirect = window.location.origin + "/";
-      window.location.href = AUTH_URL + encodeURIComponent(redirect);
-      return;
-    }
     setSigningIn(true);
-    const redirect = Linking.createURL("");
-    let captured: string | null = null;
-    const listener = Linking.addEventListener("url", ({ url }) => {
-      captured = url;
-    });
     try {
-      const result = await WebBrowser.openAuthSessionAsync(AUTH_URL + encodeURIComponent(redirect), redirect);
-      const url = (result.type === "success" ? result.url : null) ?? captured ?? (await Linking.getInitialURL());
-      const sid = extractSessionId(url);
-      if (sid) await exchange(sid);
+      if (Platform.OS === "web") {
+        throw new Error("Google sign-in is available in the ChopOut Android build. Web sign-in needs separate configuration.");
+      }
+      if (!GOOGLE_WEB_CLIENT_ID) {
+        throw new Error("Google sign-in isn't configured yet. Set EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID.");
+      }
+      // Native Google Sign-In requires an Expo development/production build,
+      // not Expo Go. No Emergent authentication or API key is involved.
+      const { GoogleSignin } = await import("@react-native-google-signin/google-signin");
+      GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      await GoogleSignin.signIn();
+      const { idToken } = await GoogleSignin.getTokens();
+      if (!idToken) throw new Error("Google did not provide a sign-in token");
+      const res = await api<{ session_token: string; user: User }>("/auth/google", {
+        method: "POST",
+        body: { id_token: idToken },
+      });
+      await storage.secureSet(TOKEN_KEY, res.session_token);
+      setToken(res.session_token);
+      setUserState(res.user);
     } catch (e: any) {
       setError(e?.message ?? "Sign-in failed");
     } finally {
-      listener.remove();
       setSigningIn(false);
     }
-  }, [exchange]);
+  }, []);
 
   const signOut = useCallback(async () => {
-    try {
-      await api("/auth/logout", { method: "POST" });
-    } catch {}
+    try { await api("/auth/logout", { method: "POST" }); } catch {}
     await clearSession();
+    if (Platform.OS !== "web") {
+      try {
+        const { GoogleSignin } = await import("@react-native-google-signin/google-signin");
+        await GoogleSignin.signOut();
+      } catch {}
+    }
   }, [clearSession]);
 
   return (
-    <Ctx.Provider
-      value={{ user, loading, signingIn, error, purchaseIdentityError, signIn, signOut, setUser: setUserState }}
-    >
+    <Ctx.Provider value={{ user, loading, signingIn, error, purchaseIdentityError, signIn, signOut, setUser: setUserState }}>
       {children}
     </Ctx.Provider>
   );
