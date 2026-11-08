@@ -136,6 +136,11 @@ class PersonOut(PublicUser):
     distance_km: Optional[float] = None
 
 
+class NearbyPerson(PersonOut):
+    approx_lat: float
+    approx_lng: float
+
+
 class CrewMember(PublicUser):
     phone: Optional[str] = None
     approx_lat: Optional[float] = None
@@ -537,7 +542,7 @@ async def check_contacts(body: ContactsIn, user: dict = Depends(pro_user)):
     return {"member_keys": found}
 
 
-@api.get("/nearby", response_model=List[PersonOut])
+@api.get("/nearby", response_model=List[NearbyPerson])
 async def nearby(trade: Optional[str] = None, user: dict = Depends(pro_user)):
     if user.get("approx_lat") is None:
         raise HTTPException(400, "Share your area first")
@@ -561,7 +566,7 @@ async def nearby(trade: Optional[str] = None, user: dict = Depends(pro_user)):
     for u in users:
         d = haversine(lat, lng, u["approx_lat"], u["approx_lng"])
         if d <= NEARBY_RADIUS_KM:
-            res.append(to_person(u, cmap, d))
+            res.append(NearbyPerson(**to_person(u, cmap, d).model_dump(), approx_lat=u["approx_lat"], approx_lng=u["approx_lng"]))
     res.sort(key=lambda p: p.distance_km or 0)
     return res
 
