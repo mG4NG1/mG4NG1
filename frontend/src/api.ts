@@ -84,6 +84,8 @@ export type Person = {
   connection: "none" | "sent" | "received" | "connected";
   connection_id?: string | null;
   distance_km?: number | null;
+  approx_lat?: number | null;
+  approx_lng?: number | null;
 };
 
 export type CrewMember = Person & {
