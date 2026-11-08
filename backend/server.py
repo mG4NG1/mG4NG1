@@ -302,20 +302,16 @@ async def is_pro(user: dict) -> bool:
         try:
             async with httpx.AsyncClient(timeout=8) as hc:
                 r = await hc.get(f"https://api.revenuecat.com/v1/subscribers/{user_id}",
-                                 headers={"Authorization": f"Bearer {REVENUECAT_API_KEY}", "X-Platform": "ios"})
+                                 headers={"Authorization": f"Bearer {REVENUECAT_API_KEY}", "X-Platform": "android"})
             if r.status_code in (200, 201):
                 ent = r.json().get("subscriber", {}).get("entitlements", {}).get(PRO_ENTITLEMENT)
                 if ent and ent.get("expires_date"):
                     pro = datetime.fromisoformat(ent["expires_date"].replace("Z", "+00:00")) > datetime.now(timezone.utc)
                 elif ent:
                     pro = True
-            elif hit:
-                return hit[1]
         except Exception as exc:
             logging.getLogger(__name__).warning("revenuecat check failed for %s: %s", user_id, exc)
-            if hit:
-                return hit[1]  # keep last known state during an outage
-            return False
+            return False  # never reuse expired Pro cache after an entitlement check fails
     _pro_cache[user_id] = (now + PRO_CACHE_SECONDS, pro)
     return pro
 
