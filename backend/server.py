@@ -412,6 +412,40 @@ async def logout(request: Request, user: dict = Depends(current_user)):
     return {"ok": True}
 
 
+class DeleteAccountIn(BaseModel):
+    confirmation: str
+
+
+@api.post("/account/delete")
+async def delete_account(body: DeleteAccountIn, user: dict = Depends(current_user)):
+    """Delete an authenticated account and its live-service data.
+
+    Subscription cancellation is separate and remains handled by Google Play.
+    Backups and any legally required moderation records need their own retention policy.
+    """
+    if body.confirmation != "DELETE":
+        raise HTTPException(422, "Enter DELETE to confirm account deletion")
+    uid = user["user_id"]
+    photo = user.get("picture_path")
+    # Delete associated live records before removing the user account.
+    await db.user_sessions.delete_many({"user_id": uid})
+    await db.messages.delete_many({"participants": uid})
+    await db.connections.delete_many({"$or": [{"from_id": uid}, {"to_id": uid}]})
+    await db.crew_notices.delete_many({"author_id": uid})
+    await db.posts.delete_many({"user_id": uid})
+    await db.user_blocks.delete_many({"$or": [{"blocker_id": uid}, {"blocked_id": uid}]})
+    await db.invites.delete_many({"from_id": uid})
+    await db.files.delete_many({"user_id": uid})
+    if photo:
+        await db.files.delete_many({"path": photo})
+        try:
+            await storage.delete_object(db, photo)
+        except Exception as exc:
+            logger.warning("Could not remove account image from storage: %s", exc)
+    await db.users.delete_one({"user_id": uid})
+    return {"ok": True}
+
+
 # ---------------- Profile ----------------
 @api.get("/trades")
 async def trades():
