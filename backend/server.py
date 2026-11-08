@@ -11,7 +11,7 @@ from typing import List, Optional
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
@@ -22,12 +22,9 @@ from starlette.middleware.cors import CORSMiddleware
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-import sms  # noqa: E402  (needs env loaded)
 import storage  # noqa: E402
 
-APP_INVITE_URL = os.environ.get("APP_INVITE_URL", "https://subbienet.app")
 MAX_PICTURE_BYTES = 5 * 1024 * 1024
-INVITES_PER_DAY = 25
 REVENUECAT_API_KEY = (os.environ.get("REVENUECAT_API_KEY") or "").strip()
 PRO_ENTITLEMENT = "pro"
 PRO_CACHE_SECONDS = 60
@@ -125,7 +122,6 @@ class FullUser(PublicUser):
     phone: Optional[str] = None
     approx_lat: Optional[float] = None
     approx_lng: Optional[float] = None
-    sms_alerts: bool = True
     lifetime_pro: bool = False
 
 
@@ -190,7 +186,6 @@ class InviteIn(BaseModel):
 
 
 class SettingsIn(BaseModel):
-    sms_alerts: bool
 
 
 class MessageOut(BaseModel):
@@ -302,22 +297,6 @@ async def pro_user(user: dict = Depends(current_user)) -> dict:
     return user
 
 
-async def alert_crew_request(from_user: dict, to_user: dict) -> None:
-    """SMS the recipient about a new crew request (only verified numbers that opted in)."""
-    if not (to_user.get("phone_verified") and to_user.get("sms_alerts", True) and sms.messaging_configured()):
-        return
-    to = sms.to_e164(to_user.get("phone") or "")
-    if not to:
-        return
-    who = from_user.get("name") or "A contractor"
-    trade = f" ({from_user['trade']})" if from_user.get("trade") else ""
-    body = f"SubbieNet: {who}{trade} wants to add you to their crew. Open the app to accept. Reply STOP to opt out."
-    try:
-        await run_in_threadpool(sms.send_sms, to, body)
-    except Exception as exc:
-        logging.getLogger(__name__).warning("crew request alert to %s failed: %s", to_user["user_id"], exc)
-
-
 async def connection_map(me: str) -> dict:
     """other_user_id -> (status, connection_id)"""
     out = {}
@@ -398,15 +377,7 @@ async def update_profile(body: ProfileIn, user: dict = Depends(current_user)):
     }
     if body.business_name is not None and await is_pro(user):
         update["business_name"] = body.business_name.strip() or None  # business profile is a Pro feature
-    if key != user.get("phone_key"):
-        update["phone_verified"] = False  # number changed: needs a fresh SMS check
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": update})
-    return full_user(await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0}))
-
-
-@api.put("/settings", response_model=FullUser)
-async def update_settings(body: SettingsIn, user: dict = Depends(current_user)):
-    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"sms_alerts": body.sms_alerts}})
     return full_user(await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0}))
 
 
@@ -466,85 +437,6 @@ async def get_file(path: str, request: Request, token: Optional[str] = None):
         raise HTTPException(exc.status, str(exc))
     return Response(content=content, media_type=rec.get("content_type") or ctype,
                     headers={"Cache-Control": "private, max-age=86400"})
-
-
-# ---------------- SMS: verification, invites ----------------
-@api.get("/sms/status")
-async def sms_status():
-    return {"messaging": sms.messaging_configured(), "verify": sms.verify_configured()}
-
-
-def sms_http_error(exc: Exception) -> HTTPException:
-    if isinstance(exc, sms.SmsNotConfigured):
-        return HTTPException(503, "Text messaging isn't set up yet")
-    if isinstance(exc, sms.SmsError):
-        return HTTPException(400, str(exc))
-    logging.getLogger(__name__).error("sms error: %s", exc)
-    return HTTPException(502, "Couldn't send the text right now")
-
-
-@api.post("/phone/send-code")
-async def phone_send_code(body: PhoneIn, user: dict = Depends(current_user)):
-    to = sms.to_e164(body.phone)
-    if not to:
-        raise HTTPException(422, "Enter a valid mobile number")
-    try:
-        status = await run_in_threadpool(sms.start_verification, to)
-    except Exception as exc:
-        raise sms_http_error(exc)
-    return {"status": status, "to": to}
-
-
-@api.post("/phone/verify", response_model=FullUser)
-async def phone_verify(body: VerifyIn, user: dict = Depends(current_user)):
-    to = sms.to_e164(body.phone)
-    if not to:
-        raise HTTPException(422, "Enter a valid mobile number")
-    try:
-        ok = await run_in_threadpool(sms.check_verification, to, body.code.strip())
-    except Exception as exc:
-        raise sms_http_error(exc)
-    if not ok:
-        raise HTTPException(400, "That code isn't right. Check the text and try again.")
-    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {
-        "phone": body.phone.strip(), "phone_key": phone_key(body.phone), "phone_verified": True,
-        "phone_verified_at": datetime.now(timezone.utc)}})
-    return full_user(await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0}))
-
-
-@api.post("/invites")
-async def send_invites(body: InviteIn, user: dict = Depends(current_user)):
-    """Text an invite to mates who aren't on SubbieNet yet. Contact names never leave the phone."""
-    me_id = user["user_id"]
-    since = datetime.now(timezone.utc) - timedelta(days=1)
-    used = await db.invites.count_documents({"from_id": me_id, "created_at": {"$gte": since}, "status": "sent"})
-    if used >= INVITES_PER_DAY:
-        raise HTTPException(429, f"You've hit today's limit of {INVITES_PER_DAY} invites")
-    who = user.get("name") or "A mate"
-    trade = f" ({user['trade']})" if user.get("trade") else ""
-    text = f"{who}{trade} invited you to SubbieNet - the crew list for subbies. Get the app: {APP_INVITE_URL}"
-    results = []
-    for raw in body.phones:
-        to = sms.to_e164(raw)
-        if not to:
-            results.append({"phone": raw, "ok": False, "error": "Invalid number"})
-            continue
-        if await db.users.find_one({"phone_key": phone_key(raw), "profile_complete": True}, {"_id": 1}):
-            results.append({"phone": raw, "ok": False, "error": "Already on SubbieNet"})
-            continue
-        if used >= INVITES_PER_DAY:
-            results.append({"phone": raw, "ok": False, "error": "Daily limit reached"})
-            continue
-        try:
-            await run_in_threadpool(sms.send_sms, to, text)
-            ok, err = True, None
-            used += 1
-        except Exception as exc:
-            ok, err = False, sms_http_error(exc).detail
-        await db.invites.insert_one({"invite_id": f"inv_{uuid.uuid4().hex[:12]}", "from_id": me_id, "to_key": phone_key(raw),
-                                     "status": "sent" if ok else "failed", "error": err, "created_at": datetime.now(timezone.utc)})
-        results.append({"phone": raw, "ok": ok, "error": err})
-    return {"results": results, "sent": sum(1 for r in results if r["ok"]), "remaining_today": max(INVITES_PER_DAY - used, 0)}
 
 
 @api.post("/location", response_model=FullUser)
@@ -632,7 +524,7 @@ async def nearby(trade: Optional[str] = None, user: dict = Depends(pro_user)):
 
 # ---------------- Connections ----------------
 @api.post("/connections/request", response_model=PersonOut)
-async def send_request(body: RequestIn, tasks: BackgroundTasks, user: dict = Depends(current_user)):
+async def send_request(body: RequestIn, user: dict = Depends(current_user)):
     me_id = user["user_id"]
     if body.user_id == me_id:
         raise HTTPException(400, "You can't add yourself")
@@ -651,8 +543,6 @@ async def send_request(body: RequestIn, tasks: BackgroundTasks, user: dict = Dep
              "$setOnInsert": {"connection_id": f"conn_{uuid.uuid4().hex[:12]}"}},
             upsert=True,
         )
-        if not existing or existing.get("status") != "pending":
-            tasks.add_task(alert_crew_request, user, other)
     return to_person(other, await connection_map(me_id))
 
 
@@ -784,8 +674,6 @@ async def start_index_build():
         await run_in_threadpool(storage.init_storage)
     except Exception as exc:
         logger.warning("object storage init failed (will retry on first upload): %s", exc)
-    if not sms.messaging_configured():
-        logger.warning("Twilio not configured: SMS invites/verification/alerts disabled")
 
 
 @app.on_event("shutdown")
