@@ -42,3 +42,12 @@ npx eas-cli build --platform android --profile production
 ```
 
 The APK is for internal installation; the AAB is for Google Play. No release build has been generated yet.
+
+## 20 km Radar and 48-hour crew noticeboard
+- Radar uses the open-source **MapLibre React Native** renderer and **OpenFreeMap** map style. Attribution and use limits must be checked in the final APK.
+- The backend restricts Radar search to **the requesting Pro member's own trade**, opted-in members within **20 km**, with an area updated within the past week.
+- Users choose whether they appear on Radar. Map points use deliberately rounded areas, not real-time GPS. Review location and consent disclosures.
+- Pro members can publish short notices. Only the author and users with an **accepted two-way crew connection** can read them in the shared noticeboard (including free crew members).
+- Notices are excluded from feeds after exactly **48 hours** and are removed in the background through MongoDB TTL indexing. Database deletion can lag briefly after expiry.
+- Users can delete their own notices immediately. Pending/rejected/future/unfriended connections never grant access.
+- Native MapLibre and OAuth code need a fresh EAS build; no APK generated yet.
