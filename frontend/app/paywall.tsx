@@ -33,7 +33,7 @@ export default function Paywall() {
   const [msg, setMsg] = useState<{ text: string; tone: "error" | "success" | "info" } | null>(null);
 
   const packages = offerings?.current?.availablePackages ?? [];
-  const pkg = packages.find((p) => p.packageType === "WEEKLY") ?? packages[0];
+  const pkg = packages.find((p) => p.packageType === "MONTHLY");
   const unavailable = !rcEnabled || (!isLoading && !pkg);
 
   const doPurchase = async (p: PurchasesPackage) => {
