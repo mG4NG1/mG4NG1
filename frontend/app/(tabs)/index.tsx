@@ -1,164 +1,132 @@
-import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, SectionList, Text, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
-
-import { api, CrewMember } from "@/src/api";
-import { Button, EmptyState, LockedCard, PersonRow, TradeChips } from "@/src/components/ui";
-import { useIncomingRequests, useTrades } from "@/src/hooks";
+import { api, payLabel } from "@/src/api";
+import { useAuth } from "@/src/auth";
 import { useSubscription } from "@/src/lib/revenuecat";
-import { usesNativeTabs } from "@/src/navigation";
-import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
+import { spacing, makeStyles, useTheme } from "@/src/theme";
 
-export default function CrewScreen() {
+type PublicListing = {
+  post_id: string; type: "job" | "work"; trade: string; title: string;
+  details?: string | null; suburb?: string | null;
+  pay_min?: number | null; pay_max?: number | null;
+  author_name: string; created_at: string; expires_at: string;
+};
+type Category = "all" | "job" | "work";
+
+export default function NoticeboardHome() {
   const s = useStyles();
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
-  const bottomChrome = usesNativeTabs ? insets.bottom : 0;
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const { isSubscribed } = useSubscription();
-  const trades = useTrades();
-  const [trade, setTrade] = useState<string | null>(null);
-  const stats = useQuery({ queryKey: ["stats"], queryFn: () => api<{ crew: number; sent_pending: number; incoming: number }>("/connections/stats") });
-  const crew = useQuery({ queryKey: ["crew"], queryFn: () => api<CrewMember[]>("/connections"), enabled: isSubscribed });
-  const requests = useIncomingRequests();
+  const [category, setCategory] = useState<Category>("all");
+  const listings = useQuery({
+    queryKey: ["public-posts", category],
+    queryFn: () => api<PublicListing[]>(`/posts/public${category === "all" ? "" : `?type=${category}`}`),
+    refetchInterval: 60000,
+  });
 
-  const sections = useMemo(() => {
-    const list = (crew.data ?? []).filter((m) => !trade || m.trade === trade);
-    const map = new Map<string, CrewMember[]>();
-    list.forEach((m) => {
-      const k = m.trade || "Other";
-      map.set(k, [...(map.get(k) ?? []), m]);
-    });
-    return [...map.entries()].map(([title, data]) => ({ title, data }));
-  }, [crew.data, trade]);
-
-  const pending = requests.data?.length ?? 0;
-
-  const header = (
-    <View style={[s.header, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={s.titleRow}>
-        <Text style={s.title}>My Crew</Text>
-        <Pressable testID="open-find-people-button" onPress={() => router.push("/find")} style={s.iconBtn}>
-          <Ionicons name="person-add" size={22} color={colors.onBrandPrimary} />
-        </Pressable>
-      </View>
-      <Pressable testID="find-people-search-bar" onPress={() => router.push("/find")} style={s.search}>
-        <Ionicons name="search" size={18} color={colors.muted} />
-        <Text style={s.searchText}>Search name or mobile number</Text>
-      </Pressable>
-      {pending > 0 ? (
-        <Pressable testID="pending-requests-banner" onPress={() => router.push("/(tabs)/inbox")} style={s.banner}>
-          <Ionicons name="notifications" size={18} color={colors.onBrandTertiary} />
-          <Text style={s.bannerText}>
-            {pending} new crew request{pending > 1 ? "s" : ""}
-          </Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.onBrandTertiary} />
-        </Pressable>
-      ) : null}
-    </View>
-  );
-
+  const openListing = (post: PublicListing) => {
+    if (!user) router.push("/login");
+    else router.push(`/post/${post.post_id}`);
+  };
+  const newPost = () => router.push(!user ? "/login" : isSubscribed ? "/post/new" : "/paywall");
+  const minutesLeft = (expiry: string) => Math.max(0, Math.ceil((new Date(expiry).getTime() - Date.now()) / 3600000));
+  const tabs: { id: Category; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "job", label: "Need a Tradie" },
+    { id: "work", label: "Available for Work" },
+  ];
   return (
-    <View style={s.root} testID="crew-screen">
-      {header}
-      <TradeChips trades={trades.data ?? []} value={trade} onChange={setTrade} />
-      {!isSubscribed ? (
-        <View style={{ flex: 1, paddingBottom: bottomChrome }}>
-          <View style={s.statsRow}>
-            <Stat label="In your crew" value={stats.data?.crew} testID="stat-crew-count" />
-            <Stat label="Requests sent" value={stats.data?.sent_pending} testID="stat-sent-count" />
-            <Stat label="Waiting on you" value={stats.data?.incoming} testID="stat-incoming-count" />
-          </View>
-          <LockedCard
-            testID="crew-locked"
-            title="See who's in your crew"
-            body="Pro shows who accepted your requests, their mobile numbers, chat and the crew map."
-            onUpgrade={() => router.push("/paywall")}
-          />
+    <View style={s.root} testID="noticeboard-home">
+      <View style={[s.brand, { paddingTop: insets.top + 8 }]}>
+        <View>
+          <Text style={s.logo}>Chop<Text style={s.logoOut}>Out!</Text></Text>
+          <Text style={s.tagline}>FIND YOUR CREW. GET IT DONE.</Text>
         </View>
-      ) : crew.isLoading ? (
-        <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.brandPrimary} />
-      ) : (
-        <SectionList
-          testID="crew-list"
-          sections={sections}
-          keyExtractor={(m) => m.user_id}
-          contentContainerStyle={{ paddingBottom: bottomChrome + spacing.lg }}
-          refreshControl={<RefreshControl refreshing={crew.isRefetching} onRefresh={() => crew.refetch()} tintColor={colors.brandPrimary} />}
-          renderSectionHeader={({ section }) => (
-            <Text style={s.section}>
-              {section.title.toUpperCase()} · {section.data.length}
-            </Text>
-          )}
-          ItemSeparatorComponent={() => <View style={s.sep} />}
-          renderItem={({ item }) => (
-            <PersonRow
-              testID={`crew-member-${item.user_id}`}
-              person={item}
-              subtitle={item.business_name || item.suburb}
-              onPress={() => router.push(`/person/${item.user_id}`)}
-              right={<Ionicons name="chevron-forward" size={18} color={colors.borderStrong} />}
-            />
-          )}
-          ListEmptyComponent={
-            <EmptyState
-              testID="crew-empty"
-              icon="people-outline"
-              title={trade ? `No ${trade.toLowerCase()}s yet` : "Build your crew"}
-              body="Sync your contacts or search by mobile number to add subbies you trust."
-              action={<Button label="Find people" icon="person-add" onPress={() => router.push("/find")} testID="crew-empty-find-button" />}
-            />
-          }
-        />
-      )}
-    </View>
-  );
-}
-
-function Stat({ label, value, testID }: { label: string; value?: number; testID: string }) {
-  const s = useStyles();
-  return (
-    <View style={s.stat}>
-      <Text style={s.statValue} testID={testID}>
-        {value ?? "–"}
-      </Text>
-      <Text style={s.statLabel}>{label}</Text>
+        <View style={s.right}>
+          <Text style={s.date}>{new Date().toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}</Text>
+          <Pressable onPress={() => router.push(user ? "/(tabs)/profile" : "/login")} accessibilityLabel={user ? "Open profile" : "Sign in"}>
+            <Ionicons name="person-circle-outline" size={27} color="#161616" />
+          </Pressable>
+        </View>
+      </View>
+      <View style={s.heading}>
+        <Text style={s.headingTitle}>Community Noticeboard</Text>
+        <Text style={s.headingSub}>Jobs • Help needed • Subcontractors</Text>
+      </View>
+      <View style={s.filterRow}>
+        {tabs.map((tab) => (
+          <Pressable key={tab.id} style={[s.filter, category === tab.id && s.filterActive]} onPress={() => setCategory(tab.id)}>
+            <Text style={[s.filterText, category === tab.id && s.filterTextActive]}>{tab.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <FlatList
+        data={listings.data ?? []}
+        keyExtractor={(p) => p.post_id}
+        refreshControl={<RefreshControl refreshing={listings.isRefetching} onRefresh={() => listings.refetch()} />}
+        contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: 110, gap: 12 }}
+        ListHeaderComponent={listings.isLoading ? <ActivityIndicator color={colors.brandPrimary} /> :
+          listings.isError ? <Text style={s.info}>Could not load listings. Pull down to retry.</Text> : null}
+        ListEmptyComponent={!listings.isLoading && !listings.isError ?
+          <Text style={s.info}>Nothing available right now. New job notices will appear here.</Text> : null}
+        renderItem={({ item }) => (
+          <Pressable style={s.card} onPress={() => openListing(item)} testID={`public-post-${item.post_id}`}>
+            <View style={s.cardTop}>
+              <Text style={s.trade}>{item.trade}</Text>
+              <Text style={s.badge}>{item.type === "job" ? "NEED A TRADIE" : "AVAILABLE FOR WORK"}</Text>
+            </View>
+            <Text style={s.title}>{item.title}</Text>
+            {!!item.details && <Text style={s.desc} numberOfLines={2}>{item.details}</Text>}
+            <Text style={s.meta}>{item.suburb || "Location on request"} · {item.author_name}</Text>
+            <View style={s.cardBottom}>
+              <Text style={s.expiry}>OPEN · Expires in {minutesLeft(item.expires_at)}h</Text>
+              <Text style={s.view}>View job ›</Text>
+            </View>
+          </Pressable>
+        )}
+      />
+      <Pressable style={s.postButton} onPress={newPost} testID="noticeboard-post-button">
+        <Ionicons name="add-circle-outline" color="#171717" size={22} />
+        <Text style={s.postLabel}>{isSubscribed ? "Post a notice" : "Post a notice · Pro"}</Text>
+      </Pressable>
     </View>
   );
 }
 
 const useStyles = makeStyles((c) => ({
-  root: { flex: 1, backgroundColor: c.surface },
-  header: { paddingHorizontal: spacing.lg, gap: spacing.md, paddingBottom: spacing.xs },
-  titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 32, fontWeight: "800", color: c.onSurface, letterSpacing: -0.5 },
-  iconBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.brandPrimary, alignItems: "center", justifyContent: "center" },
-  search: {
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: c.surfaceTertiary,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  searchText: { color: c.muted, fontSize: font.lg },
-  banner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: c.brandTertiary,
-    padding: spacing.md,
-    borderRadius: radius.md,
-  },
-  bannerText: { flex: 1, color: c.onBrandTertiary, fontWeight: "600", fontSize: font.base },
-  statsRow: { flexDirection: "row", gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
-  stat: { flex: 1, backgroundColor: c.surfaceSecondary, borderRadius: radius.md, padding: spacing.md },
-  statValue: { fontSize: font.xxl, fontWeight: "800", color: c.onSurface },
-  statLabel: { fontSize: font.sm, color: c.muted, marginTop: 2 },
-  section: { fontSize: font.sm, fontWeight: "600", color: c.muted, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm, backgroundColor: c.surface },
-  sep: { height: 1, backgroundColor: c.divider, marginLeft: 72 },
+  root: { flex: 1, backgroundColor: "#FFFFFF" },
+  brand: { backgroundColor: "#FFC400", paddingHorizontal: 18, paddingBottom: 14, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  logo: { fontSize: 29, fontWeight: "900", fontStyle: "italic", color: "#101E35", letterSpacing: -1 },
+  logoOut: { color: "#FFFFFF" },
+  tagline: { fontSize: 9, fontWeight: "800", color: "#2C2C2C", letterSpacing: 1 },
+  right: { alignItems: "flex-end", gap: 5 },
+  date: { fontSize: 12, fontWeight: "700", color: "#232323" },
+  heading: { marginHorizontal: 16, marginTop: 18, marginBottom: 12 },
+  headingTitle: { fontSize: 24, fontWeight: "800", color: "#101820" },
+  headingSub: { fontSize: 13, color: "#555" },
+  filterRow: { flexDirection: "row", gap: 6, marginHorizontal: 16, marginBottom: 14 },
+  filter: { flex: 1, paddingVertical: 12, paddingHorizontal: 4, borderRadius: 12, backgroundColor: "#F2F2F2", alignItems: "center" },
+  filterActive: { backgroundColor: "#FFC400" },
+  filterText: { fontSize: 11, fontWeight: "700", color: "#454545", textAlign: "center" },
+  filterTextActive: { color: "#131313" },
+  card: { backgroundColor: "#FFF", padding: 14, borderRadius: 14, borderWidth: 1, borderColor: "#E3E3E3", gap: 7, elevation: 2 },
+  cardTop: { flexDirection: "row", justifyContent: "space-between", gap: 8, alignItems: "center" },
+  trade: { fontSize: 12, fontWeight: "800", color: "#303030" },
+  badge: { backgroundColor: "#FFF2B0", color: "#313131", paddingVertical: 5, paddingHorizontal: 9, borderRadius: 8, fontSize: 10, fontWeight: "800" },
+  title: { fontSize: 17, fontWeight: "800", color: "#101820" },
+  desc: { fontSize: 13, lineHeight: 19, color: "#454545" },
+  meta: { fontSize: 12, color: "#6B6B6B" },
+  cardBottom: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 6 },
+  expiry: { color: "#397A38", fontSize: 11, fontWeight: "700" },
+  view: { color: "#101820", fontSize: 12, fontWeight: "800" },
+  info: { textAlign: "center", color: "#555", paddingTop: 35 },
+  postButton: { position: "absolute", bottom: 12, right: 16, left: 16, backgroundColor: "#FFC400", borderRadius: 14, height: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, elevation: 4 },
+  postLabel: { color: "#171717", fontWeight: "800", fontSize: 15 },
 }));
