@@ -15,8 +15,8 @@ from server import (NEARBY_RADIUS_KM, PersonOut, TRADES, connection_map, conv_ke
 
 router = APIRouter(prefix="/posts")
 
-JOB_DAYS = 14
-WORK_DAYS = 3
+JOB_DAYS = 2  # Auto-hide jobs 48 hours after posting
+WORK_DAYS = 2 # Auto-hide availability notices after 48 hours
 PAY_WIDTH = 20  # each band is $20 wide: 40-60, 50-70, 60-80 ...
 PAY_STEP = 10
 PAY_MIN, PAY_MAX = 20, 180
@@ -118,6 +118,57 @@ def _active_filter() -> dict:
     return {"closed": {"$ne": True}, "expires_at": {"$gt": datetime.now(timezone.utc)}}
 
 
+class PublicPostOut(BaseModel):
+    post_id: str
+    type: Literal["job", "work"]
+    trade: str
+    title: str
+    details: Optional[str] = None
+    start: Optional[str] = None
+    duration: Optional[str] = None
+    pay_min: Optional[int] = None
+    pay_max: Optional[int] = None
+    suburb: Optional[str] = None
+    created_at: str
+    expires_at: str
+    author_name: str
+
+
+@router.get("/public", response_model=List[PublicPostOut])
+async def public_board(type: Optional[Literal["job", "work"]] = None):
+    """Public read-only listings: no exact positions, phone numbers or responder details."""
+    flt = _active_filter()
+    if type:
+        flt["type"] = type
+    rows = await db.posts.find(flt, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
+    ids = list({p["user_id"] for p in rows})
+    authors = {u["user_id"]: u async for u in db.users.find(
+        {"user_id": {"$in": ids}, "profile_complete": True},
+        {"_id": 0, "user_id": 1, "name": 1},
+    )}
+    return [
+        PublicPostOut(
+            post_id=p["post_id"], type=p["type"], trade=p["trade"], title=p["title"],
+            details=p.get("details"), start=p.get("start"), duration=p.get("duration"),
+            pay_min=p.get("pay_min"), pay_max=p.get("pay_max"), suburb=p.get("suburb"),
+            created_at=iso(p["created_at"]), expires_at=iso(p["expires_at"]),
+            author_name=authors[p["user_id"]].get("name") or "Tradie",
+        ) for p in rows if p["user_id"] in authors
+    ]
+
+
+@router.post("/{post_id}/chopped-out")
+async def chopped_out(post_id: str, user: dict = Depends(pro_user)):
+    """Only the original Pro advertiser can mark a job filled."""
+    result = await db.posts.update_one(
+        {"post_id": post_id, "user_id": user["user_id"], "closed": {"$ne": True}},
+        {"$set": {"closed": True, "closed_reason": "chopped_out", "closed_at": datetime.now(timezone.utc)}},
+    )
+    if not result.matched_count:
+        raise HTTPException(404, "Open listing not found or not yours")
+    return {"ok": True, "status": "chopped_out"}
+
+
 @router.get("", response_model=List[PostOut])
 async def list_posts(type: Optional[str] = None, trade: Optional[str] = None, mine: bool = False, user: dict = Depends(pro_user)):
     visible, dist = await _visible_author_ids(user)
@@ -166,7 +217,7 @@ async def create_post(body: PostIn, user: dict = Depends(pro_user)):
 
 async def _get_visible_post(post_id: str, user: dict) -> tuple[dict, dict, set, dict]:
     post = await db.posts.find_one({"post_id": post_id}, {"_id": 0})
-    if not post or post.get("closed"):
+    if not post or post.get("closed") or post.get("expires_at", datetime.now(timezone.utc)) <= datetime.now(timezone.utc):
         raise HTTPException(404, "This post is no longer available")
     visible, dist = await _visible_author_ids(user)
     if post["user_id"] not in visible:
