@@ -31,7 +31,7 @@ function Gate() {
     const first = segments[0] as string | undefined;
     // Guest browsing remains public; only account-only screens require login.
     const guestAllowed =
-      first === "(tabs)" && (segments[1] === "index" || segments[1] === "work") ||
+      first === "(tabs)" && (!segments[1] || segments[1] === "index" || segments[1] === "work") ||
       first === "login";
     if (!user) {
       if (!guestAllowed) router.replace("/(tabs)");
