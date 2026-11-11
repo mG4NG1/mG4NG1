@@ -29,8 +29,12 @@ function Gate() {
   useEffect(() => {
     if (loading) return;
     const first = segments[0] as string | undefined;
+    // Guest browsing remains public; only account-only screens require login.
+    const guestAllowed =
+      first === "(tabs)" && (segments[1] === "index" || segments[1] === "work") ||
+      first === "login";
     if (!user) {
-      if (first !== "login") router.replace("/login");
+      if (!guestAllowed) router.replace("/(tabs)");
     } else if (!user.profile_complete) {
       if (first !== "onboarding") router.replace("/onboarding");
     } else if (!first || first === "login") {
