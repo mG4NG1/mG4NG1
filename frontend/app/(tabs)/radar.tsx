@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { ActivityIndicator, Platform, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Platform, ScrollView, Switch, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 
-import { api, CrewMember, Person, User } from "@/src/api";
+import { api, Person, User } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { CrewMap } from "@/src/components/crew-map";
 import { PermissionPrompt, PermState } from "@/src/components/permission-prompt";
@@ -39,7 +39,19 @@ export default function RadarScreen() {
     queryFn: () => api<Person[]>("/nearby"),
     enabled: isSubscribed && hasArea,
   });
-  const crew = useQuery({ queryKey: ["crew"], queryFn: () => api<CrewMember[]>("/connections"), enabled: isSubscribed });
+  const [updatingVisibility, setUpdatingVisibility] = useState(false);
+  const setVisibility = async (visible: boolean) => {
+    setUpdatingVisibility(true);
+    setLocError(null);
+    try {
+      setUser(await api<User>("/location/visibility", { method: "PUT", body: { visible } }));
+      qc.invalidateQueries({ queryKey: ["nearby"] });
+    } catch (e: any) {
+      setLocError(e?.message ?? "Could not update Radar visibility");
+    } finally {
+      setUpdatingVisibility(false);
+    }
+  };
 
   const shareArea = async () => {
     setLocating(true);
@@ -78,7 +90,7 @@ export default function RadarScreen() {
     }
   };
 
-  const points = (crew.data ?? [])
+  const points = (nearby.data ?? [])
     .filter((m) => m.approx_lat != null && m.approx_lng != null)
     .map((m) => ({ id: m.user_id, name: m.name, trade: m.trade, lat: m.approx_lat!, lng: m.approx_lng! }));
 
@@ -87,7 +99,7 @@ export default function RadarScreen() {
       <View style={[s.header, { paddingTop: insets.top + spacing.sm }]}>
         <Text style={s.title}>Radar</Text>
         <Text style={s.sub} testID="radar-area-label">
-          {hasArea ? `Your area: ${user?.suburb || "shared"} · within 25 km` : "Share your area to find and be found"}
+          {hasArea ? `${user?.trade || "Your trade"} · within 20 km` : "Share your approximate area to find your trade"}
         </Text>
       </View>
       <ScrollView contentContainerStyle={{ paddingBottom: bottomChrome + spacing.xl }}>
@@ -101,7 +113,7 @@ export default function RadarScreen() {
             testID="location-permission"
             icon="location-outline"
             title="Share your approximate area"
-            body="Contractors nearby can find you for work. Only your rough suburb area is saved, never your exact spot."
+            body="Only a rough area is stored. Other members cannot find you on Radar unless you switch on visibility."
             perm={perm}
             onAllow={shareArea}
             loading={locating}
@@ -113,17 +125,32 @@ export default function RadarScreen() {
           <LockedCard
             testID="radar-locked"
             title="Find subbies near you"
-            body="Pro unlocks the crew map and lets you message tradies within 25 km: “Hey mate, looking for work?”"
+            body="Pro unlocks a map showing members in your profession within 20 km, with options to connect and chat."
             onUpgrade={() => router.push("/paywall")}
           />
         ) : (
           <>
             {hasArea ? (
+              <View style={s.visibilityRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.visibilityTitle}>Appear on nearby Radar</Text>
+                  <Text style={s.visibilityHelp}>Other tradies in your profession can see your approximate area when enabled.</Text>
+                </View>
+                <Switch
+                  value={!!user?.radar_visible}
+                  onValueChange={setVisibility}
+                  disabled={updatingVisibility}
+                  accessibilityLabel="Allow other tradies to find me on Radar"
+                  testID="radar-visibility-switch"
+                />
+              </View>
+            ) : null}
+            {hasArea ? (
               <CrewMap center={{ lat: user!.approx_lat!, lng: user!.approx_lng! }} points={points} onSelect={(id) => router.push(`/person/${id}`)} />
             ) : null}
             {hasArea ? (
               <View style={s.refresh}>
-                <Text style={s.mapNote}>Circles show approximate areas only.</Text>
+                <Text style={s.mapNote}>Pins show approximate areas, not real-time positions.</Text>
                 <Button small variant="outline" label="Update my area" icon="locate" onPress={shareArea} loading={locating} testID="radar-update-area-button" />
               </View>
             ) : null}
@@ -169,4 +196,7 @@ const useStyles = makeStyles((c) => ({
   mapNote: { flex: 1, color: c.muted, fontSize: font.sm },
   nearCard: { backgroundColor: c.surfaceSecondary, marginHorizontal: spacing.lg, marginBottom: spacing.md, borderRadius: 12, overflow: "hidden" },
   quick: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  visibilityRow: { marginHorizontal: spacing.lg, marginVertical: spacing.md, padding: spacing.md, backgroundColor: c.surfaceSecondary, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: spacing.md },
+  visibilityTitle: { color: c.onSurface, fontSize: 16, fontWeight: "700" },
+  visibilityHelp: { color: c.muted, fontSize: 12, lineHeight: 18, marginTop: 4 },
 }));

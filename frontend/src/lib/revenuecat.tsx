@@ -12,19 +12,23 @@ const REVENUECAT_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_AP
 
 export const REVENUECAT_ENTITLEMENT_IDENTIFIER = "pro";
 
-export const rcKeysPresent = !!(REVENUECAT_TEST_API_KEY && REVENUECAT_IOS_API_KEY && REVENUECAT_ANDROID_API_KEY);
-// web preview uses the Test Store; never call the SDK without keys
-export const rcEnabled = rcKeysPresent && (Platform.OS !== "web" || __DEV__);
-export const isSimulatedStore = Platform.OS === "web" || __DEV__;
+// Native Android only requires its own RevenueCat app key. Development builds
+// installed through Google Play use the real Android key with Play test products.
+export const rcKeysPresent =
+  Platform.OS === "android" ? !!REVENUECAT_ANDROID_API_KEY :
+  Platform.OS === "ios" ? !!REVENUECAT_IOS_API_KEY :
+  !!REVENUECAT_TEST_API_KEY;
+export const rcEnabled = rcKeysPresent;
+export const isSimulatedStore = Platform.OS === "web";
 
 function getRevenueCatApiKey() {
-  if (!rcKeysPresent) {
-    throw new Error("RevenueCat public API keys not found — run the Setup section first");
+  const key = Platform.OS === "android" ? REVENUECAT_ANDROID_API_KEY :
+    Platform.OS === "ios" ? REVENUECAT_IOS_API_KEY :
+    REVENUECAT_TEST_API_KEY;
+  if (!key) {
+    throw new Error("RevenueCat public app key not configured for this platform");
   }
-  if (Platform.OS === "web" || __DEV__) return REVENUECAT_TEST_API_KEY!;
-  if (Platform.OS === "ios") return REVENUECAT_IOS_API_KEY!;
-  if (Platform.OS === "android") return REVENUECAT_ANDROID_API_KEY!;
-  return REVENUECAT_TEST_API_KEY!;
+  return key;
 }
 
 export function initializeRevenueCat() {

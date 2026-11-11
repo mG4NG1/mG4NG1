@@ -1,13 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, Person, SmsStatus } from "@/src/api";
+import { api, Person } from "@/src/api";
 
 export function useTrades() {
   return useQuery({ queryKey: ["trades"], queryFn: () => api<string[]>("/trades"), staleTime: Infinity });
 }
 
-export function useSmsStatus() {
-  return useQuery({ queryKey: ["sms-status"], queryFn: () => api<SmsStatus>("/sms/status"), staleTime: 5 * 60 * 1000 });
-}
 
 export function useIncomingRequests() {
   return useQuery({ queryKey: ["requests"], queryFn: () => api<Person[]>("/connections/requests"), refetchInterval: 15000 });

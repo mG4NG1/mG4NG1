@@ -16,9 +16,9 @@ import { font, makeStyles, radius, spacing, useTheme } from "@/src/theme";
 const HERO = "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200";
 const FEATURES = [
   "See who accepted your crew requests",
-  "Chat and call your crew directly",
-  "Find subbies within 25 km on the map",
-  "Send “looking for work?” to tradies nearby",
+  "Start conversations; Free members can reply",
+  "Find tradies in your profession within 20 km on Radar",
+  "Post 48-hour notices and reach out to tradies",
   "Show your business on your profile",
 ];
 
@@ -33,7 +33,7 @@ export default function Paywall() {
   const [msg, setMsg] = useState<{ text: string; tone: "error" | "success" | "info" } | null>(null);
 
   const packages = offerings?.current?.availablePackages ?? [];
-  const pkg = packages.find((p) => p.packageType === "WEEKLY") ?? packages[0];
+  const pkg = packages.find((p) => p.packageType === "WEEKLY");
   const unavailable = !rcEnabled || (!isLoading && !pkg);
 
   const doPurchase = async (p: PurchasesPackage) => {

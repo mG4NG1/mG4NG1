@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "ChopOut",
+    "slug": "chopout",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "chopout",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.tradelink.f233sr",
+      "bundleIdentifier": "com.mamimoinc.chopout",
       "infoPlist": {
-        "NSContactsUsageDescription": "Find tradies you know who are already on SubbieNet",
+        "NSContactsUsageDescription": "Find tradies you know who are already on ChopOut",
         "NSLocationWhenInUseUsageDescription": "Show subbies working near you for jobs",
         "NSCameraUsageDescription": "Take a portrait photo for your profile",
         "NSPhotoLibraryUsageDescription": "Choose a portrait photo or business logo for your profile"
@@ -22,7 +22,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.emergent.tradelink.f233sr",
+      "package": "com.mamimoinc.chopout",
       "permissions": [
         "android.permission.READ_CONTACTS",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -53,15 +53,27 @@
       "expo-web-browser",
       "expo-status-bar",
       "@react-native-vector-icons/ionicons",
-      ["expo-contacts", { "contactsPermission": "Find tradies you know who are already on SubbieNet" }],
-      ["expo-location", { "locationWhenInUsePermission": "Show subbies working near you for jobs" }],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Find tradies you know who are already on ChopOut"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Show subbies working near you for jobs"
+        }
+      ],
       [
         "expo-image-picker",
         {
           "photosPermission": "Choose a portrait photo or business logo for your profile",
           "cameraPermission": "Take a portrait photo for your profile"
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin",
+      "@maplibre/maplibre-react-native"
     ],
     "experiments": {
       "typedRoutes": true

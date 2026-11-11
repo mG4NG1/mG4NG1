@@ -7,7 +7,6 @@ import { Ionicons } from "@react-native-vector-icons/ionicons";
 
 import { api, User } from "@/src/api";
 import { useAuth } from "@/src/auth";
-import { PhoneVerify } from "@/src/components/phone-verify";
 import { PicturePicker } from "@/src/components/picture-picker";
 import { Button, Notice } from "@/src/components/ui";
 import { useTrades } from "@/src/hooks";
@@ -90,7 +89,6 @@ export default function Onboarding() {
           placeholder="e.g. 0412 345 678"
           placeholderTextColor={colors.muted}
         />
-        {user ? <PhoneVerify phone={phone} user={user} onVerified={setUser} /> : null}
 
         <Text style={s.label}>Your trade</Text>
         <View style={s.grid}>

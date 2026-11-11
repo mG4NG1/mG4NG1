@@ -24,6 +24,10 @@ export default function TabsLayout() {
           <NativeTabs.Trigger.Icon sf="briefcase.fill" />
           <NativeTabs.Trigger.Label>Work</NativeTabs.Trigger.Label>
         </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="noticeboard">
+          <NativeTabs.Trigger.Icon sf="text.bubble.fill" />
+          <NativeTabs.Trigger.Label>Board</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
         <NativeTabs.Trigger name="inbox">
           <NativeTabs.Trigger.Icon sf="tray.fill" />
           <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
@@ -59,6 +63,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ title: "Crew", tabBarButtonTestID: "tab-crew", tabBarIcon: icon("people", "people-outline") }} />
       <Tabs.Screen name="radar" options={{ title: "Radar", tabBarButtonTestID: "tab-radar", tabBarIcon: icon("map", "map-outline") }} />
       <Tabs.Screen name="work" options={{ title: "Work", tabBarButtonTestID: "tab-work", tabBarIcon: icon("briefcase", "briefcase-outline") }} />
+      <Tabs.Screen name="noticeboard" options={{ title: "Board", tabBarButtonTestID: "tab-noticeboard", tabBarIcon: icon("reader", "reader-outline") }} />
       <Tabs.Screen name="inbox" options={{ title: "Inbox", tabBarButtonTestID: "tab-inbox", tabBarIcon: icon("file-tray-full", "file-tray-outline") }} />
       <Tabs.Screen name="profile" options={{ title: "Profile", tabBarButtonTestID: "tab-profile", tabBarIcon: icon("person-circle", "person-circle-outline") }} />
     </Tabs>
