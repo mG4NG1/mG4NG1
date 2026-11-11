@@ -48,7 +48,7 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
 
 GOOGLE_CLIENT_IDS = {v.strip() for v in os.environ.get("GOOGLE_CLIENT_IDS", "").split(",") if v.strip()}
-NEARBY_RADIUS_KM = 20
+NEARBY_RADIUS_KM = 25
 LOCATION_MAX_AGE_HOURS = 24 * 7
 TRADES = [
     "Electrician", "Carpenter", "Plumber", "Steelfixer", "Concreter", "Landscaper",
