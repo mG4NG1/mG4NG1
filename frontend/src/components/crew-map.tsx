@@ -34,7 +34,7 @@ export function CrewMap({
         ))}
       </Map>
       <View pointerEvents="none" style={styles.mapLabel}>
-        <Text style={styles.mapLabelText}>20 km radar · Approximate locations</Text>
+        <Text style={styles.mapLabelText}>25 km radar · Approximate locations</Text>
       </View>
     </View>
   );
