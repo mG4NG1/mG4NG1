@@ -17,7 +17,7 @@ const HERO = "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?crop=
 const FEATURES = [
   "See who accepted your crew requests",
   "Start conversations; Free members can reply",
-  "Find tradies in your profession within 20 km on Radar",
+  "Find tradies in your profession within 25 km on Radar",
   "Post 48-hour notices and reach out to tradies",
   "Show your business on your profile",
 ];
