@@ -23,7 +23,7 @@ export default function PostDetailScreen() {
   const post = useQuery({ queryKey: ["post", id], queryFn: () => api<Post>(`/posts/${id}`) });
   const p = post.data;
 
-  const goBack = () => (router.canGoBack() ? router.back() : router.replace("/(tabs)/work"));
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace("/(tabs)"));
 
   const keen = async () => {
     if (!p) return;
@@ -59,6 +59,31 @@ export default function PostDetailScreen() {
       { text: "Keep it", style: "cancel" },
       { text: "Close post", style: "destructive", onPress: doClose },
     ]);
+  };
+
+  const choppedOut = () => {
+    if (!p?.mine) return;
+    Alert.alert(
+      "CHOPPED OUT!?",
+      "Confirm you've found the worker you need. This listing will disappear from the active board.",
+      [
+        { text: "Not yet", style: "cancel" },
+        { text: "CHOPPED OUT!", onPress: async () => {
+          setBusy(true);
+          try {
+            await api(`/posts/${p.post_id}/chopped-out`, { method: "POST" });
+            qc.invalidateQueries({ queryKey: ["public-posts"] });
+            qc.invalidateQueries({ queryKey: ["posts"] });
+            Alert.alert("CHOPPED OUT!", "Worker found. Nice work, mate!");
+            router.replace("/(tabs)");
+          } catch (e: any) {
+            setError(e.message ?? "Unable to close the job");
+          } finally {
+            setBusy(false);
+          }
+        }},
+      ]
+    );
   };
 
   return (
@@ -124,7 +149,10 @@ export default function PostDetailScreen() {
       {p ? (
         <View style={[s.footer, { paddingBottom: insets.bottom + spacing.md }]}>
           {p.mine ? (
-            <Button label="Close post" icon="close-circle-outline" variant="outline" onPress={close} loading={busy} testID="post-close-button" />
+            <View style={{ gap: 8 }}>
+              {p.type === "job" ? <Button label="CHOPPED OUT! ✓" icon="checkmark-circle" onPress={choppedOut} loading={busy} testID="post-chopped-out-button" /> : null}
+              <Button label="Remove listing" icon="close-circle-outline" variant="outline" onPress={close} loading={busy} testID="post-close-button" />
+            </View>
           ) : p.keen ? (
             <Button label="You're keen · Open chat" icon="chatbubble-ellipses" variant="dark" onPress={() => router.push(`/chat/${p.author.user_id}`)} testID="post-open-chat-button" />
           ) : (
