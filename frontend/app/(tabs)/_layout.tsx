@@ -1,71 +1,31 @@
-import { Platform } from "react-native";
 import { Tabs } from "expo-router";
-import { NativeTabs } from "expo-router/native-tabs";
 import { Ionicons } from "@react-native-vector-icons/ionicons";
 
-import { usesNativeTabs } from "@/src/navigation";
-import { useTheme } from "@/src/theme";
-
+// A consistent hard-hat yellow footer on Android and iOS.
+// Extra legacy routes stay reachable internally but are not main tabs.
 export default function TabsLayout() {
-  const { colors } = useTheme();
-
-  if (usesNativeTabs) {
-    return (
-      <NativeTabs tintColor={colors.brandPrimary}>
-        <NativeTabs.Trigger name="index">
-          <NativeTabs.Trigger.Icon sf="person.3.fill" />
-          <NativeTabs.Trigger.Label>Crew</NativeTabs.Trigger.Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="radar">
-          <NativeTabs.Trigger.Icon sf="map.fill" />
-          <NativeTabs.Trigger.Label>Radar</NativeTabs.Trigger.Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="work">
-          <NativeTabs.Trigger.Icon sf="briefcase.fill" />
-          <NativeTabs.Trigger.Label>Work</NativeTabs.Trigger.Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="noticeboard">
-          <NativeTabs.Trigger.Icon sf="text.bubble.fill" />
-          <NativeTabs.Trigger.Label>Board</NativeTabs.Trigger.Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="inbox">
-          <NativeTabs.Trigger.Icon sf="tray.fill" />
-          <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
-        </NativeTabs.Trigger>
-        <NativeTabs.Trigger name="profile">
-          <NativeTabs.Trigger.Icon sf="person.crop.circle.fill" />
-          <NativeTabs.Trigger.Label>Profile</NativeTabs.Trigger.Label>
-        </NativeTabs.Trigger>
-      </NativeTabs>
-    );
-  }
-
-  const icon =
-    (on: React.ComponentProps<typeof Ionicons>["name"], off: React.ComponentProps<typeof Ionicons>["name"]) =>
+  const icon = (on: React.ComponentProps<typeof Ionicons>["name"], off: React.ComponentProps<typeof Ionicons>["name"]) =>
     ({ focused, color }: { focused: boolean; color: string }) =>
-      <Ionicons name={focused ? on : off} size={24} color={color} />;
+      <Ionicons name={focused ? on : off} size={23} color={color} />;
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.brandSecondary,
-        tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: {
-          backgroundColor: colors.surfaceSecondary,
-          borderTopColor: colors.divider,
-          ...(Platform.OS === "web" ? { height: 64 } : {}),
-        },
-        tabBarItemStyle: { alignSelf: "center" },
-        tabBarLabelStyle: { fontWeight: "600" },
+        tabBarActiveTintColor: "#111827",
+        tabBarInactiveTintColor: "#4A4030",
+        tabBarStyle: { backgroundColor: "#FFC400", borderTopColor: "#F0B500", height: 66 },
+        tabBarLabelStyle: { fontWeight: "700", fontSize: 10 },
+        tabBarItemStyle: { paddingTop: 4 },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Crew", tabBarButtonTestID: "tab-crew", tabBarIcon: icon("people", "people-outline") }} />
-      <Tabs.Screen name="radar" options={{ title: "Radar", tabBarButtonTestID: "tab-radar", tabBarIcon: icon("map", "map-outline") }} />
-      <Tabs.Screen name="work" options={{ title: "Work", tabBarButtonTestID: "tab-work", tabBarIcon: icon("briefcase", "briefcase-outline") }} />
-      <Tabs.Screen name="noticeboard" options={{ title: "Board", tabBarButtonTestID: "tab-noticeboard", tabBarIcon: icon("reader", "reader-outline") }} />
-      <Tabs.Screen name="inbox" options={{ title: "Inbox", tabBarButtonTestID: "tab-inbox", tabBarIcon: icon("file-tray-full", "file-tray-outline") }} />
-      <Tabs.Screen name="profile" options={{ title: "Profile", tabBarButtonTestID: "tab-profile", tabBarIcon: icon("person-circle", "person-circle-outline") }} />
+      <Tabs.Screen name="index" options={{ title: "Board", tabBarButtonTestID: "tab-board", tabBarIcon: icon("megaphone", "megaphone-outline") }} />
+      <Tabs.Screen name="profile" options={{ title: "Profile", tabBarButtonTestID: "tab-profile", tabBarIcon: icon("person", "person-outline") }} />
+      <Tabs.Screen name="crew" options={{ title: "Crew", tabBarButtonTestID: "tab-crew", tabBarIcon: icon("people", "people-outline") }} />
+      <Tabs.Screen name="inbox" options={{ title: "Chats", tabBarButtonTestID: "tab-chats", tabBarIcon: icon("chatbubbles", "chatbubbles-outline") }} />
+      <Tabs.Screen name="radar" options={{ title: "Map", tabBarButtonTestID: "tab-map", tabBarIcon: icon("map", "map-outline") }} />
+      <Tabs.Screen name="work" options={{ href: null }} />
+      <Tabs.Screen name="noticeboard" options={{ href: null }} />
     </Tabs>
   );
 }
