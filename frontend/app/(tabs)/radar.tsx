@@ -99,7 +99,7 @@ export default function RadarScreen() {
       <View style={[s.header, { paddingTop: insets.top + spacing.sm }]}>
         <Text style={s.title}>Radar</Text>
         <Text style={s.sub} testID="radar-area-label">
-          {hasArea ? `${user?.trade || "Your trade"} · within 20 km` : "Share your approximate area to find your trade"}
+          {hasArea ? `${user?.trade || "Your trade"} · within 25 km` : "Share your approximate area to find your trade"}
         </Text>
       </View>
       <ScrollView contentContainerStyle={{ paddingBottom: bottomChrome + spacing.xl }}>
@@ -125,7 +125,7 @@ export default function RadarScreen() {
           <LockedCard
             testID="radar-locked"
             title="Find subbies near you"
-            body="Pro unlocks a map showing members in your profession within 20 km, with options to connect and chat."
+            body="Pro unlocks a map showing members in your profession within 25 km, with options to connect and chat."
             onUpgrade={() => router.push("/paywall")}
           />
         ) : (
